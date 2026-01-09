@@ -3,6 +3,7 @@ using NexA.Hub.Utils;
 using System;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Assertions;
 using UnityEngine.UI;
 
 namespace NexA.Hub.Components
@@ -69,11 +70,11 @@ namespace NexA.Hub.Components
     public class ToastNotification : MonoBehaviour
     {
         [Header("UI References")]
-        [SerializeField] private RectTransform rectTransform;
-        [SerializeField] private CanvasGroup canvasGroup;
-        [SerializeField] private TextMeshProUGUI messageText;
+        private RectTransform rectTransform;
+        private CanvasGroup canvasGroup;
         [SerializeField] private Image backgroundImage;
         [SerializeField] private Image iconImage;
+        [SerializeField] private TextMeshProUGUI messageText;
 
         [Header("Colors")]
         [SerializeField] private Color infoColor = new Color(0.2f, 0.6f, 1f);
@@ -87,6 +88,20 @@ namespace NexA.Hub.Components
 
         private Sequence _animationSequence;
 
+        private void Awake()
+        {
+            rectTransform = GetComponent<RectTransform>();
+            canvasGroup = GetComponent<CanvasGroup>();
+            
+            Assert.IsNotNull(rectTransform, "[TestNotification] rectTransform is null");
+            Assert.IsNotNull(canvasGroup, "[TestNotification] canvasGroup is null");
+            Assert.IsNotNull(messageText, "[TestNotification] messageText is null");
+            Assert.IsNotNull(backgroundImage, "[TestNotification] backgroundImage is null");
+            Assert.IsNotNull(iconImage, "[TestNotification] iconImage is null");
+
+            //Setup("qwoenqwioeqw", ToastType.Error, 6f);
+        }
+        
         public void Setup(string message, ToastType type, float duration)
         {
             messageText.text = message;
