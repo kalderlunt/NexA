@@ -5,6 +5,7 @@ using System;
 using System.Threading.Tasks;
 using NexA.Hub.Components;
 using NexA.Hub.Core;
+using NexA.Hub.Models;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -83,7 +84,7 @@ namespace NexA.Hub.Screens
 
             await ExecuteWithLoadingAsync(async () =>
             {
-                var user = await AuthManager.Instance.LoginAsync(email, password);
+                User user = await AuthManager.Instance.LoginAsync(email, password);
                 
                 // Success
                 Debug.Log($"[Login] Success! Welcome {user.username}");
@@ -101,9 +102,11 @@ namespace NexA.Hub.Screens
 
         private void ValidateInputs()
         {
-            bool isValid = !string.IsNullOrWhiteSpace(emailInput.text) 
-                        && !string.IsNullOrWhiteSpace(passwordInput.text)
-                        && passwordInput.text.Length >= 8;
+            bool hasEmail = !string.IsNullOrWhiteSpace(emailInput.text);
+            bool hasPassword = !string.IsNullOrWhiteSpace(passwordInput.text);
+            bool isPasswordLongEnough = passwordInput.text.Length >= ValidationConstants.MinPasswordLength;
+            
+            bool isValid = hasEmail && hasPassword && isPasswordLongEnough;
             
             loginButton.interactable = isValid;
         }

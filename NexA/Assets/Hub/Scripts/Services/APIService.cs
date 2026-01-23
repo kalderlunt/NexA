@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -18,14 +18,18 @@ namespace NexA.Hub.Services
         public static APIService Instance { get; private set; }
 
         [Header("Configuration")]
+#if UNITY_EDITOR
+        [SerializeField] private string baseURL = "http://192.168.1.19:8080/api/v1";
+#else
         [SerializeField] private string baseURL = "https://api.nexa.game/v1";
+#endif
         [SerializeField] private int timeoutSeconds = 10;
         [SerializeField] private int maxRetries = 3;
         [SerializeField] private float retryDelaySeconds = 1f;
 
         private void Awake()
         {
-            if (Instance != null)
+            if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
                 return;
@@ -33,6 +37,7 @@ namespace NexA.Hub.Services
             Instance = this;
             DontDestroyOnLoad(gameObject);
         }
+
 
         #region Auth Endpoints
 
@@ -244,12 +249,13 @@ namespace NexA.Hub.Services
 
             try
             {
-                var response = JsonConvert.DeserializeObject<APIResponse<T>>(json);
+                // Parse directement le JSON (pas de wrapper APIResponse)
+                T result = JsonConvert.DeserializeObject<T>(json);
                 
-                if (response.success && response.data != null)
-                    return response.data;
+                if (result != null)
+                    return result;
 
-                throw new Exception("Invalid API response format");
+                throw new Exception("Failed to deserialize response");
             }
             catch (Exception ex)
             {

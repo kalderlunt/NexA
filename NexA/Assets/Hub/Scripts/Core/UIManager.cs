@@ -17,6 +17,7 @@ namespace NexA.Hub.Core
         public static UIManager Instance { get; private set; }
 
         [Header("UI Configuration")]
+        [Header("UI Configuration")]
         [SerializeField] private Transform screensContainer;
         [SerializeField] private CanvasGroup fadeOverlay;
         [SerializeField] private Transform toastContainer;
@@ -26,9 +27,9 @@ namespace NexA.Hub.Core
 
         public Transform ToastContainer => toastContainer;
 
-        private Dictionary<ScreenType, ScreenBase> _screens = new();
-        private ScreenType _currentScreen = ScreenType.None;
-        private bool _isTransitioning = false;
+        private Dictionary<ScreenType, ScreenBase> screens = new();
+        private ScreenType currentScreen = ScreenType.None;
+        private bool isTransitioning = false;
 
         // Transitions autorisées
         private static readonly Dictionary<ScreenType, List<ScreenType>> AllowedTransitions = new()
@@ -45,12 +46,11 @@ namespace NexA.Hub.Core
 
         private void Awake()
         {
-            if (Instance != null)
+            if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
-
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
@@ -74,13 +74,13 @@ namespace NexA.Hub.Core
                 var screen = child.GetComponent<ScreenBase>();
                 if (screen != null)
                 {
-                    _screens[screen.ScreenType] = screen;
+                    screens[screen.ScreenType] = screen;
                     screen.gameObject.SetActive(false);
                     Debug.Log($"[UIManager] Loaded screen: {screen.ScreenType}");
                 }
             }
 
-            Debug.Log($"[UIManager] Total screens loaded: {_screens.Count}");
+            Debug.Log($"[UIManager] Total screens loaded: {screens.Count}");
         }
 
         private void InitializeFadeOverlay()
@@ -98,22 +98,22 @@ namespace NexA.Hub.Core
         /// </summary>
         public async void ShowScreen(ScreenType screenType, object data = null)
         {
-            if (_isTransitioning)
+            if (isTransitioning)
             {
                 Debug.LogWarning($"[UIManager] Transition already in progress, ignoring request for {screenType}");
                 return;
             }
 
-            if (_currentScreen == screenType)
+            if (currentScreen == screenType)
             {
                 Debug.LogWarning($"[UIManager] Already on screen {screenType}");
                 return;
             }
 
             // Vérifier si transition autorisée
-            if (!IsTransitionAllowed(_currentScreen, screenType))
+            if (!IsTransitionAllowed(currentScreen, screenType))
             {
-                Debug.LogWarning($"[UIManager] Transition {_currentScreen} → {screenType} not allowed");
+                Debug.LogWarning($"[UIManager] Transition {currentScreen} → {screenType} not allowed");
                 return;
             }
 
@@ -125,7 +125,7 @@ namespace NexA.Hub.Core
         /// </summary>
         public void GoBack()
         {
-            ScreenType previousScreen = GetPreviousScreen(_currentScreen);
+            ScreenType previousScreen = GetPreviousScreen(currentScreen);
             if (previousScreen != ScreenType.None)
             {
                 ShowScreen(previousScreen);
@@ -134,23 +134,23 @@ namespace NexA.Hub.Core
 
         private async Task TransitionToScreen(ScreenType screenType, object data)
         {
-            _isTransitioning = true;
+            isTransitioning = true;
 
             try
             {
                 // 1. Hide current screen
-                if (_currentScreen != ScreenType.None && _screens.ContainsKey(_currentScreen))
+                if (currentScreen != ScreenType.None && screens.ContainsKey(currentScreen))
                 {
-                    Debug.Log($"[UIManager] Hiding screen: {_currentScreen}");
-                    await _screens[_currentScreen].HideAsync();
+                    Debug.Log($"[UIManager] Hiding screen: {currentScreen}");
+                    await screens[currentScreen].HideAsync();
                 }
 
                 // 2. Fade overlay in
                 await FadeOverlayAsync(true);
 
                 // 3. Switch screens
-                _currentScreen = screenType;
-                var newScreen = _screens[screenType];
+                currentScreen = screenType;
+                var newScreen = screens[screenType];
 
                 // 4. Fade overlay out
                 await FadeOverlayAsync(false);
@@ -165,7 +165,7 @@ namespace NexA.Hub.Core
             }
             finally
             {
-                _isTransitioning = false;
+                isTransitioning = false;
             }
         }
 
@@ -206,12 +206,12 @@ namespace NexA.Hub.Core
         /// <summary>
         /// Obtenir l'écran actuel
         /// </summary>
-        public ScreenType GetCurrentScreen() => _currentScreen;
+        public ScreenType GetCurrentScreen() => currentScreen;
 
         /// <summary>
         /// Vérifier si un écran est chargé
         /// </summary>
-        public bool IsScreenLoaded(ScreenType screenType) => _screens.ContainsKey(screenType);
+        public bool IsScreenLoaded(ScreenType screenType) => screens.ContainsKey(screenType);
 
         private void OnDestroy()
         {

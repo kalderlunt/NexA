@@ -12,6 +12,25 @@ Guide complet pour développer un client PC type League of Legends avec Unity + 
 | **[QUICK_START.md](./QUICK_START.md)**   | 15 min | Setup complet (DB + Backend + Unity) |
 | **[DEPENDENCIES.md](./DEPENDENCIES.md)** | 10 min | Installation de toutes les dépendances |
 
+### 🎮 Démarrage Rapide Unity UI
+
+**Pour créer rapidement l'UI du client Unity, suivez dans l'ordre :**
+
+1. **[UI_STEP_BY_STEP_GUIDE.md](./UI_STEP_BY_STEP_GUIDE.md)** (2-3h)  
+   → Créer tous les écrans et prefabs étape par étape
+
+2. **[UI_RECTRANSFORM_VALUES.md](./UI_RECTRANSFORM_VALUES.md)** (référence)  
+   → **Toutes les valeurs précises** (Width, Height, Anchors, Colors)
+
+3. **[UI_HIERARCHY_QUICK_REFERENCE.md](./UI_HIERARCHY_QUICK_REFERENCE.md)** (référence)  
+   → Avoir sous les yeux pendant la création pour vérifier les structures
+
+4. **[UNITY_IMPLEMENTATION_GUIDE.md](./UNITY_IMPLEMENTATION_GUIDE.md)** (référence)  
+   → Consulter pour les détails de code et patterns
+
+5. **[UI_FILES_INDEX.md](./UI_FILES_INDEX.md)** (checklist)  
+   → Valider que tous les fichiers sont créés
+
 ---
 
 ## 📚 Documentation Détaillée
@@ -29,6 +48,11 @@ Guide complet pour développer un client PC type League of Legends avec Unity + 
 | Document | Contenu | Lignes |
 |----------|---------|--------|
 | **[UNITY_ARCHITECTURE.md](./UNITY_ARCHITECTURE.md)** | Architecture Unity, Design System DOTween | ~400 |
+| **[UNITY_IMPLEMENTATION_GUIDE.md](./UNITY_IMPLEMENTATION_GUIDE.md)** | 🆕 Guide complet implémentation Unity (Screens, Services, Animations) | ~2300 |
+| **[UI_HIERARCHY_QUICK_REFERENCE.md](./UI_HIERARCHY_QUICK_REFERENCE.md)** | 🆕 Référence rapide hiérarchie UI (Layout, Colors, Components) | ~600 |
+| **[UI_STEP_BY_STEP_GUIDE.md](./UI_STEP_BY_STEP_GUIDE.md)** | 🆕 Guide pas à pas création UI Unity (2-3h) | ~1000 |
+| **[UI_RECTRANSFORM_VALUES.md](./UI_RECTRANSFORM_VALUES.md)** | 🆕 **Valeurs complètes RectTransform (toutes les dimensions)** | ~1200 |
+| **[UI_FILES_INDEX.md](./UI_FILES_INDEX.md)** | 🆕 Index complet des fichiers UI (Prefabs, Scripts, Assets) | ~700 |
 | **[BACKEND_NESTJS.md](./BACKEND_NESTJS.md)** | Backend NestJS avec exemples concrets | ~600 |
 | **[OBSERVABILITY_OPS.md](./OBSERVABILITY_OPS.md)** | Logs, métriques, Grafana, déploiement Debian | ~700 |
 
@@ -38,7 +62,7 @@ Guide complet pour développer un client PC type League of Legends avec Unity + 
 |----------|---------|--------|
 | **[SUMMARY.md](./SUMMARY.md)** | Récapitulatif complet du livrable | ~350 |
 
-**Total**: ~3200 lignes de documentation structurée
+**Total**: ~8900 lignes de documentation structurée (mise à jour 2026-01-09)
 
 ---
 

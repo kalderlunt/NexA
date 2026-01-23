@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 
 namespace NexA.Hub.Models
@@ -18,7 +18,7 @@ namespace NexA.Hub.Models
     public class RefreshResponse
     {
         public string accessToken;
-        public int expiresIn;
+        public long expiresIn;
     }
 
     [Serializable]
@@ -26,7 +26,7 @@ namespace NexA.Hub.Models
     {
         public string accessToken;
         public string refreshToken;
-        public int expiresIn;
+        public long expiresIn;
     }
     
     
