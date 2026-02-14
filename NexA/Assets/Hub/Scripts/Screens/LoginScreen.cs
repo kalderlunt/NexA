@@ -1,11 +1,12 @@
 ﻿using DG.Tweening;
 using NexA.Hub.Services;
-using NexA.Hub.Utils;
-using System;
+using Utils;
+using System.Collections;
 using System.Threading.Tasks;
 using NexA.Hub.Components;
 using NexA.Hub.Core;
 using NexA.Hub.Models;
+using NexA.Hub.Utils;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -29,7 +30,12 @@ namespace NexA.Hub.Screens
         [Header("Animation")]
         [SerializeField] private CanvasGroup formCanvasGroup;
         [SerializeField] private RectTransform logoTransform;
-
+        [SerializeField] private Transform spinner;
+        
+        [Header("Screens")]
+        [SerializeField] private ScreenType registerScreen = ScreenType.RegisterMultiStep;
+        [SerializeField] private ScreenType homeScreen = ScreenType.Home;
+        
         public override ScreenType ScreenType => ScreenType.Login;
 
         private void Start()
@@ -48,22 +54,33 @@ namespace NexA.Hub.Screens
         public override async Task ShowAsync(object data = null)
         {
             gameObject.SetActive(true);
-            HideError();
+            errorPanel.SetActive(false);
 
             // Animation d'entrée
             Sequence sequence = DOTween.Sequence();
             
+            // Form fade in
+            sequence.Append(formCanvasGroup.DOFade(1f, AnimationHelper.NORMAL).SetEase(AnimationHelper.IN_SMOOTH).From(0));
+            formCanvasGroup.interactable = true; 
+            
+            //sequence.AppendInterval(0.1f);
+            
             // Logo bounce
             logoTransform.localScale = Vector3.zero;
             sequence.Append(logoTransform.DOScale(1f, AnimationHelper.MEDIUM).SetEase(AnimationHelper.IN_BACK));
-            
-            // Form fade in
-            sequence.AppendInterval(0.1f);
-            sequence.Append(formCanvasGroup.DOFade(1f, AnimationHelper.NORMAL).SetEase(AnimationHelper.IN_SMOOTH).From(0));
-            
-            formCanvasGroup.interactable = true;
 
             await sequence.AsyncWaitForCompletion();
+            
+            // Si un email est passé en paramètre (depuis l'inscription), l'animer dans le champ
+            if (data is string email && !string.IsNullOrEmpty(email))
+            {
+                emailInput.text = ""; // Start empty
+                AnimationHelper.TypewriterEffect(emailInput.textComponent as TextMeshProUGUI, email, AnimationHelper.MEDIUM, () =>
+                {
+                    emailInput.text = email; // Ensure it's set
+                    ValidateInputs(); // Update button state
+                });
+            }
         }
 
         public override async Task HideAsync()
@@ -79,6 +96,7 @@ namespace NexA.Hub.Screens
 
         private async void OnLoginClicked()
         {
+            // Prevent multiple login attempts
             string email = emailInput.text.Trim();
             string password = passwordInput.text;
 
@@ -91,13 +109,13 @@ namespace NexA.Hub.Screens
                 ToastManager.Show($"Bienvenue, {user.username} !", ToastType.Success);
                 
                 // Transition vers Home
-                UIManager.Instance.ShowScreen(ScreenType.Home);
+                UIManager.Instance.ShowScreen(homeScreen);
             });
         }
 
         private void OnRegisterClicked()
         {
-            UIManager.Instance.ShowScreen(ScreenType.Register);
+            UIManager.Instance.ShowScreen(registerScreen);
         }
 
         private void ValidateInputs()
@@ -119,9 +137,10 @@ namespace NexA.Hub.Screens
             if (show)
             {
                 // Animer le spinner
-                Transform spinner = loadingPanel.transform.Find("Spinner");
-                if (spinner != null)
+                if (!spinner)
                     AnimationHelper.StartLoadingSpinner(spinner);
+                else
+                    Debug.LogError("Loading spinner animation");
             }
         }
 
@@ -130,15 +149,15 @@ namespace NexA.Hub.Screens
             errorText.text = message;
             errorPanel.SetActive(true);
             
-            // Shake l'error panel
             AnimationHelper.ShakeError(errorPanel.transform);
             
-            // Auto-hide après 5s
-            DOVirtual.DelayedCall(5f, () => HideError());
+            StopAllCoroutines();
+            StartCoroutine(HideErrorAfterDelay(5f));
         }
 
-        private void HideError()
+        private IEnumerator HideErrorAfterDelay(float delay)
         {
+            yield return new WaitForSeconds(delay);
             errorPanel.SetActive(false);
         }
 

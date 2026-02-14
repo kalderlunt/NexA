@@ -1,6 +1,5 @@
 ﻿using DG.Tweening;
-using NexA.Hub.Utils;
-using System;
+using Utils;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Assertions;

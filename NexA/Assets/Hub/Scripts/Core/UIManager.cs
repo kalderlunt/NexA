@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using DG.Tweening;
 using NexA.Hub.Screens;
-using NexA.Hub.Utils;
+using Utils;
 using UnityEngine;
 
 namespace NexA.Hub.Core
@@ -16,7 +16,6 @@ namespace NexA.Hub.Core
     {
         public static UIManager Instance { get; private set; }
 
-        [Header("UI Configuration")]
         [Header("UI Configuration")]
         [SerializeField] private Transform screensContainer;
         [SerializeField] private CanvasGroup fadeOverlay;
@@ -35,8 +34,9 @@ namespace NexA.Hub.Core
         private static readonly Dictionary<ScreenType, List<ScreenType>> AllowedTransitions = new()
         {
             { ScreenType.None, new() { ScreenType.Login } },
-            { ScreenType.Login, new() { ScreenType.Register, ScreenType.Home } },
+            { ScreenType.Login, new() { ScreenType.Register, ScreenType.RegisterMultiStep, ScreenType.Home } },
             { ScreenType.Register, new() { ScreenType.Login } },
+            { ScreenType.RegisterMultiStep, new() { ScreenType.Login } },
             { ScreenType.Home, new() { ScreenType.Profile, ScreenType.Friends, ScreenType.MatchHistory, ScreenType.Login } },
             { ScreenType.Profile, new() { ScreenType.Home } },
             { ScreenType.Friends, new() { ScreenType.Home, ScreenType.Profile } },
@@ -171,7 +171,7 @@ namespace NexA.Hub.Core
 
         private async Task FadeOverlayAsync(bool fadeIn)
         {
-            if (fadeOverlay == null) return;
+            if (!fadeOverlay) return;
 
             float targetAlpha = fadeIn ? 1f : 0f;
             fadeOverlay.blocksRaycasts = fadeIn;
@@ -195,6 +195,7 @@ namespace NexA.Hub.Core
             return current switch
             {
                 ScreenType.Register => ScreenType.Login,
+                ScreenType.RegisterMultiStep => ScreenType.Login,
                 ScreenType.Profile => ScreenType.Home,
                 ScreenType.Friends => ScreenType.Home,
                 ScreenType.MatchHistory => ScreenType.Home,

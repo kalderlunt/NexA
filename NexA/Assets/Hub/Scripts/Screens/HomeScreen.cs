@@ -3,7 +3,7 @@ using NexA.Hub.Components;
 using NexA.Hub.Core;
 using NexA.Hub.Models;
 using NexA.Hub.Services;
-using NexA.Hub.Utils;
+using Utils;
 using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
@@ -13,32 +13,35 @@ namespace NexA.Hub.Screens
 {
     /// <summary>
     /// Écran d'accueil principal après connexion
-    /// Affiche les infos du joueur, amis en ligne, et accès rapides
+    /// Affiche les infos du joueur et les menus principaux
+    /// Structure selon UI_STEP_BY_STEP_GUIDE.md - Partie 3
     /// </summary>
     public class HomeScreen : ScreenBase
     {
-        [Header("User Info")]
+        [Header("TopBar - User Info")]
+        [SerializeField] private GameObject topBar;
+        [SerializeField] private RectTransform userInfoPanel;
+        [SerializeField] private Image avatarImage;
         [SerializeField] private TextMeshProUGUI usernameText;
         [SerializeField] private TextMeshProUGUI levelText;
         [SerializeField] private TextMeshProUGUI eloText;
-        [SerializeField] private Image avatarImage;
 
-        [Header("Quick Actions")]
+        [Header("MainPanel - Menu Buttons")]
+        [SerializeField] private GameObject mainPanel;
+        [SerializeField] private RectTransform quickActionsPanel;
         [SerializeField] private Button playButton;
         [SerializeField] private Button friendsButton;
         [SerializeField] private Button profileButton;
         [SerializeField] private Button matchHistoryButton;
         [SerializeField] private Button logoutButton;
 
-        [Header("Stats")]
+        [Header("Stats Display")]
         [SerializeField] private TextMeshProUGUI onlineFriendsText;
         [SerializeField] private TextMeshProUGUI totalMatchesText;
         [SerializeField] private TextMeshProUGUI winRateText;
 
         [Header("Animation")]
         [SerializeField] private CanvasGroup mainCanvasGroup;
-        [SerializeField] private RectTransform userInfoPanel;
-        [SerializeField] private RectTransform quickActionsPanel;
 
         public override ScreenType ScreenType => ScreenType.Home;
 

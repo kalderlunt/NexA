@@ -8,6 +8,7 @@
         None,
         Login,
         Register,
+        RegisterMultiStep,
         Home,
         Profile,
         Friends,

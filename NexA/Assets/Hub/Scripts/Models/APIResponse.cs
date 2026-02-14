@@ -28,6 +28,29 @@ namespace NexA.Hub.Models
         public string refreshToken;
         public long expiresIn;
     }
+
+    [Serializable]
+    public class CheckAvailabilityResponse
+    {
+        public bool available;
+        public string message;
+    }
+
+    [Serializable]
+    public class SendCodeResponse
+    {
+        public bool success;
+        public string message;
+        public int expiresIn; // Durée de validité du code en secondes (ex: 600 = 10 min)
+    }
+
+    [Serializable]
+    public class VerifyCodeResponse
+    {
+        public bool success;
+        public bool valid;
+        public string message;
+    }
     
     
     // ============================================

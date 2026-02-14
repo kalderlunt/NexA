@@ -1,9 +1,9 @@
 ﻿using DG.Tweening;
-using NexA.Hub.Services;
-using NexA.Hub.Utils;
+using Utils;
 using System.Threading.Tasks;
 using NexA.Hub.Components;
 using NexA.Hub.Core;
+using NexA.Hub.Utils;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -95,14 +95,14 @@ namespace NexA.Hub.Screens
 
             await ExecuteWithLoadingAsync(async () =>
             {
-                var user = await AuthManager.Instance.RegisterAsync(username, email, password);
+                //bool isRegister = await AuthManager.Instance.RegisterAsync(username, email, password);
                 
                 // Success
-                Debug.Log($"[Register] Success! Welcome {user.username}");
-                ToastManager.Show($"Compte créé avec succès ! Bienvenue, {user.username}", ToastType.Success);
+                Debug.Log($"[Register] Success! Welcome {username}");
+                ToastManager.Show($"Compte créé avec succès ! Bienvenue, {username}", ToastType.Success);
                 
                 // Transition vers Home
-                UIManager.Instance.ShowScreen(ScreenType.Home);
+                UIManager.Instance.ShowScreen(ScreenType.Login);
             });
         }
 

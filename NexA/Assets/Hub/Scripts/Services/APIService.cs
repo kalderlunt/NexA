@@ -1,4 +1,4 @@
-﻿﻿using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
@@ -62,6 +62,33 @@ namespace NexA.Hub.Services
         public async Task LogoutAsync()
         {
             await SendRequestAsync<EmptyResponse>("/auth/logout", "POST");
+        }
+
+        /// <summary>
+        /// Vérifie si un username existe déjà
+        /// </summary>
+        public async Task<CheckAvailabilityResponse> CheckUsernameAvailabilityAsync(string username)
+        {
+            string url = $"/auth/check-username?username={Uri.EscapeDataString(username)}";
+            return await SendRequestAsync<CheckAvailabilityResponse>(url, "GET", requiresAuth: false);
+        }
+
+        /// <summary>
+        /// Vérifie si un email existe déjà
+        /// </summary>
+        public async Task<CheckAvailabilityResponse> CheckEmailAvailabilityAsync(string email)
+        {
+            var body = new { email };
+            return await SendRequestAsync<CheckAvailabilityResponse>("/auth/check-email", "POST", body, requiresAuth: false);
+        }
+
+        /// <summary>
+        /// Inscription avec code de vérification (code généré côté Unity)
+        /// </summary>
+        public async Task<AuthResponse> RegisterWithCodeAsync(string username, string email, string password, string verificationCode)
+        {
+            var body = new { username, email, password, verificationCode };
+            return await SendRequestAsync<AuthResponse>("/auth/register", "POST", body, requiresAuth: false);
         }
 
         #endregion

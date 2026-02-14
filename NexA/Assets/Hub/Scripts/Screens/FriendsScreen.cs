@@ -3,7 +3,7 @@ using NexA.Hub.Components;
 using NexA.Hub.Core;
 using NexA.Hub.Models;
 using NexA.Hub.Services;
-using NexA.Hub.Utils;
+using Utils;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;

@@ -84,24 +84,35 @@ namespace NexA.Hub.Services
         /// <summary>
         /// Inscription d'un nouvel utilisateur
         /// </summary>
-        public async Task<User> RegisterAsync(string username, string email, string password)
+        /// <param name="username">Nom d'utilisateur (3-20 caractères, alphanumerique)</param>
+        /// <param name="email">Adresse email valide</param>
+        /// <param name="password">Mot de passe (min 8 caractères, 1 maj, 1 min, 1 chiffre)</param>
+        /// <param name="verificationCode">Code de vérification à 6 chiffres</param>
+        /// <returns>True si l'inscription réussit, sinon lance une AuthException</returns>
+        /// <exception cref="AuthException">Si l'inscription échoue</exception>
+        public async Task<bool> RegisterAsync(string username, string email, string password, string verificationCode)
         {
             try
             {
-                Debug.Log($"[AuthManager] Tentative d'inscription pour {email}");
+                Debug.Log($"[AuthManager] Tentative d'inscription pour {username} ({email}) avec code de vérification");
 
-                var response = await APIService.Instance.RegisterAsync(username, email, password);
+                AuthResponse response = await APIService.Instance.RegisterWithCodeAsync(username, email, password, verificationCode);
                 
                 StoreTokens(response.tokens);
                 CurrentUser = response.user;
 
-                Debug.Log($"[AuthManager] Inscription réussie pour {CurrentUser.username}");
-                return CurrentUser;
+                Debug.Log($"[AuthManager] ✅ Inscription réussie pour {CurrentUser.username} (ID: {CurrentUser.id})");
+                return true;
             }
             catch (APIException ex)
             {
-                Debug.LogError($"[AuthManager] Échec de l'inscription: {ex.Code} - {ex.Message}");
+                Debug.LogError($"[AuthManager] ❌ Échec de l'inscription: {ex.Code} - {ex.Message}");
                 throw new AuthException(GetFriendlyErrorMessage(ex.Code), ex);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[AuthManager] ❌ Erreur inattendue lors de l'inscription: {ex.Message}");
+                throw new AuthException("Une erreur inattendue s'est produite. Veuillez réessayer.", ex);
             }
         }
 
