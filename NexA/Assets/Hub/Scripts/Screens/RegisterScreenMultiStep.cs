@@ -43,6 +43,10 @@ namespace NexA.Hub.Screens
     public class RegisterScreenMultiStep : ScreenBase
     {
         public override ScreenType ScreenType => ScreenType.RegisterMultiStep;
+        // ============================================
+        // CONFIGURATION: Testing Mode
+        [Header("Testing Mode")]
+        [SerializeField] private bool CHECK_TO_BACKEND = true;  // Set to false to disable username check
 
         [Header("Progress Indicator")]
         [SerializeField] private Image[] stepIndicators;
@@ -116,10 +120,6 @@ namespace NexA.Hub.Screens
         [SerializeField] private Color invalidColor = new Color(0.91f, 0.3f, 0.24f); // #E74C3C
         [SerializeField] private Color textInactiveColor = new Color(0.5f, 0.5f, 0.5f); // #808080
         
-        // ============================================
-        // CONFIGURATION: Testing Mode
-        [SerializeField] private bool CHECK_USERNAME_BACKEND = true;  // Set to false to disable username check
-        [SerializeField] private bool SHOW_CODE_IN_TOAST = true;  // ← ACTIVER pour mode test
         
         // Verification Code Delays
         private const float MIN_GENERATION_DELAY = 0.5f;  // Minimum code generation time
@@ -203,10 +203,9 @@ namespace NexA.Hub.Screens
             ShowStep(currentStep);
             
             // Log configuration status
-            if (!CHECK_USERNAME_BACKEND)
-                Debug.LogWarning("[RegisterScreenMultiStep] Username backend validation is DISABLED");
-            if (SHOW_CODE_IN_TOAST)
+            if (!CHECK_TO_BACKEND)
             {
+                Debug.LogWarning("[RegisterScreenMultiStep] Username backend validation is DISABLED");
                 Debug.LogWarning("[RegisterScreenMultiStep] 🧪 TEST MODE ENABLED:");
                 Debug.LogWarning("  → Verification code shown in Toast popup (no real email)");
                 Debug.LogWarning("  → Registration simulated (no database/API call)");
@@ -449,7 +448,7 @@ namespace NexA.Hub.Screens
             isUsernameValid = ValidateUsername(value);
             
             // Si validation locale OK ET check backend activé, vérifier disponibilité avec debounce
-            if (isUsernameValid && CHECK_USERNAME_BACKEND)
+            if (isUsernameValid && CHECK_TO_BACKEND)
             {
                 // Cancel previous check
                 if (usernameCheckCoroutine != null)
@@ -813,7 +812,7 @@ namespace NexA.Hub.Screens
         /// </summary>
         private void ShowVerificationCodeToast(bool isResend = false)
         {
-            if (SHOW_CODE_IN_TOAST)
+            if (!CHECK_TO_BACKEND)
             {
                 string message = isResend 
                     ? $"🔑 Nouveau code : {generatedVerificationCode}\n(Mode Test)"
@@ -836,7 +835,7 @@ namespace NexA.Hub.Screens
         {
             if (!verificationInstructionText) return;
 
-            if (SHOW_CODE_IN_TOAST)
+            if (!CHECK_TO_BACKEND)
             {
                 verificationInstructionText.text = $"Un code de vérification a été généré\n<b>Voir popup ci-dessus (Mode Test)</b>\nEmail: {emailField.text}";
             }
@@ -1006,7 +1005,7 @@ namespace NexA.Hub.Screens
             string email = emailField.text;
             
             // MODE TEST : Simuler l'inscription sans appel API
-            if (SHOW_CODE_IN_TOAST)
+            if (!CHECK_TO_BACKEND)
             {
                 Debug.Log($"🧪 [MODE TEST] Simulation inscription pour {username}");
                 

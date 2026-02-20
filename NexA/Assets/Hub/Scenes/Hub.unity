@@ -25599,6 +25599,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c78475ee96634ce988d14e58f359da57, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NexA.Hub.Screens.RegisterScreenMultiStep
+  CHECK_TO_BACKEND: 1
   stepIndicators:
   - {fileID: 1547567048}
   - {fileID: 623299351}
@@ -25665,8 +25666,6 @@ MonoBehaviour:
   validColor: {r: 0.18, g: 0.8, b: 0.44, a: 1}
   invalidColor: {r: 0.91, g: 0.3, b: 0.24, a: 1}
   textInactiveColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  CHECK_USERNAME_BACKEND: 0
-  SHOW_CODE_IN_TOAST: 1
 --- !u!1 &2031786120
 GameObject:
   m_ObjectHideFlags: 0
@@ -26491,7 +26490,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c13c4913ab3b4dfaa2b1f1f68299b203, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NexA.Hub.Services.APIService
-  baseURL: http://192.168.1.19:8080/api/v1
+  baseURL: http://192.168.1.19:8080
+  extAPI: api/v1
+  extAPIAuth: auth
   timeoutSeconds: 10
   maxRetries: 3
   retryDelaySeconds: 1

@@ -19,7 +19,9 @@ namespace NexA.Hub.Services
 
         [Header("Configuration")]
 #if UNITY_EDITOR
-        [SerializeField] private string baseURL = "http://192.168.1.19:8080/api/v1";
+        [SerializeField] private string baseURL = "http://192.168.1.19:8080";
+		[SerializeField] private string extAPI = "api/v1";
+		[SerializeField] private string extAPIAuth = "auth";
 #else
         [SerializeField] private string baseURL = "https://api.nexa.game/v1";
 #endif
@@ -44,24 +46,24 @@ namespace NexA.Hub.Services
         public async Task<AuthResponse> RegisterAsync(string username, string email, string password)
         {
             var body = new { username, email, password };
-            return await SendRequestAsync<AuthResponse>("/auth/register", "POST", body, requiresAuth: false);
+            return await SendRequestAsync<AuthResponse>($"/{extAPI}/{extAPIAuth}/register", "POST", body, requiresAuth: false);
         }
 
         public async Task<AuthResponse> LoginAsync(string email, string password)
         {
             var body = new { email, password };
-            return await SendRequestAsync<AuthResponse>("/auth/login", "POST", body, requiresAuth: false);
+            return await SendRequestAsync<AuthResponse>($"/{extAPI}/{extAPIAuth}/login", "POST", body, requiresAuth: false);
         }
 
         public async Task<RefreshResponse> RefreshTokenAsync(string refreshToken)
         {
             var body = new { refreshToken };
-            return await SendRequestAsync<RefreshResponse>("/auth/refresh", "POST", body, requiresAuth: false);
+            return await SendRequestAsync<RefreshResponse>($"/{extAPI}/{extAPIAuth}/refresh", "POST", body, requiresAuth: false);
         }
 
         public async Task LogoutAsync()
         {
-            await SendRequestAsync<EmptyResponse>("/auth/logout", "POST");
+            await SendRequestAsync<EmptyResponse>($"/{extAPI}/{extAPIAuth}/logout", "POST");
         }
 
         /// <summary>
@@ -69,7 +71,7 @@ namespace NexA.Hub.Services
         /// </summary>
         public async Task<CheckAvailabilityResponse> CheckUsernameAvailabilityAsync(string username)
         {
-            string url = $"/auth/check-username?username={Uri.EscapeDataString(username)}";
+            string url = $"/{extAPI}/{extAPIAuth}/check-username?username={Uri.EscapeDataString(username)}";
             return await SendRequestAsync<CheckAvailabilityResponse>(url, "GET", requiresAuth: false);
         }
 
@@ -78,8 +80,8 @@ namespace NexA.Hub.Services
         /// </summary>
         public async Task<CheckAvailabilityResponse> CheckEmailAvailabilityAsync(string email)
         {
-            var body = new { email };
-            return await SendRequestAsync<CheckAvailabilityResponse>("/auth/check-email", "POST", body, requiresAuth: false);
+            string url = $"/{extAPI}/{extAPIAuth}/check-email?email={Uri.EscapeDataString(email)}";
+            return await SendRequestAsync<CheckAvailabilityResponse>(url, "GET", requiresAuth: false);
         }
 
         /// <summary>
@@ -88,7 +90,7 @@ namespace NexA.Hub.Services
         public async Task<AuthResponse> RegisterWithCodeAsync(string username, string email, string password, string verificationCode)
         {
             var body = new { username, email, password, verificationCode };
-            return await SendRequestAsync<AuthResponse>("/auth/register", "POST", body, requiresAuth: false);
+            return await SendRequestAsync<AuthResponse>($"/{extAPI}/{extAPIAuth}/register", "POST", body, requiresAuth: false);
         }
 
         #endregion
