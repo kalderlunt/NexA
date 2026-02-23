@@ -19,7 +19,7 @@ namespace NexA.Hub.Screens
     public class LoginScreen : ScreenBase
     {
         [Header("UI References")]
-        [SerializeField] private TMP_InputField emailInput;
+        [SerializeField] private TMP_InputField usernameInput;
         [SerializeField] private TMP_InputField passwordInput;
         [SerializeField] private Button loginButton;
         [SerializeField] private Button registerButton;
@@ -45,7 +45,7 @@ namespace NexA.Hub.Screens
             registerButton.onClick.AddListener(OnRegisterClicked);
 
             // Input validation en temps réel
-            emailInput.onValueChanged.AddListener(_ => ValidateInputs());
+            usernameInput.onValueChanged.AddListener(_ => ValidateInputs());
             passwordInput.onValueChanged.AddListener(_ => ValidateInputs());
 
             ValidateInputs();
@@ -71,13 +71,13 @@ namespace NexA.Hub.Screens
 
             await sequence.AsyncWaitForCompletion();
             
-            // Si un email est passé en paramètre (depuis l'inscription), l'animer dans le champ
-            if (data is string email && !string.IsNullOrEmpty(email))
+            // Si un username est passé en paramètre (depuis l'inscription), l'animer dans le champ
+            if (data is string username && !string.IsNullOrEmpty(username))
             {
-                emailInput.text = ""; // Start empty
-                AnimationHelper.TypewriterEffect(emailInput.textComponent as TextMeshProUGUI, email, AnimationHelper.MEDIUM, () =>
+                usernameInput.text = ""; // Start empty
+                AnimationHelper.TypewriterEffect(usernameInput.textComponent as TextMeshProUGUI, username, AnimationHelper.MEDIUM, () =>
                 {
-                    emailInput.text = email; // Ensure it's set
+                    usernameInput.text = username; // Ensure it's set
                     ValidateInputs(); // Update button state
                 });
             }
@@ -97,12 +97,12 @@ namespace NexA.Hub.Screens
         private async void OnLoginClicked()
         {
             // Prevent multiple login attempts
-            string email = emailInput.text.Trim();
+            string username = usernameInput.text.Trim();
             string password = passwordInput.text;
 
             await ExecuteWithLoadingAsync(async () =>
             {
-                User user = await AuthManager.Instance.LoginAsync(email, password);
+                User user = await AuthManager.Instance.LoginAsync(username, password);
                 
                 // Success
                 Debug.Log($"[Login] Success! Welcome {user.username}");
@@ -120,11 +120,11 @@ namespace NexA.Hub.Screens
 
         private void ValidateInputs()
         {
-            bool hasEmail = !string.IsNullOrWhiteSpace(emailInput.text);
+            bool hasUsername = !string.IsNullOrWhiteSpace(usernameInput.text);
             bool hasPassword = !string.IsNullOrWhiteSpace(passwordInput.text);
             bool isPasswordLongEnough = passwordInput.text.Length >= ValidationConstants.MinPasswordLength;
             
-            bool isValid = hasEmail && hasPassword && isPasswordLongEnough;
+            bool isValid = hasUsername && hasPassword && isPasswordLongEnough;
             
             loginButton.interactable = isValid;
         }

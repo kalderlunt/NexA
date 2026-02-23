@@ -43,11 +43,6 @@ namespace NexA.Hub.Screens
     public class RegisterScreenMultiStep : ScreenBase
     {
         public override ScreenType ScreenType => ScreenType.RegisterMultiStep;
-        // ============================================
-        // CONFIGURATION: Testing Mode
-        [Header("Testing Mode")]
-        [SerializeField] private bool CHECK_TO_BACKEND = true;  // Set to false to disable username check
-
         [Header("Progress Indicator")]
         [SerializeField] private Image[] stepIndicators;
         [SerializeField] private TextMeshProUGUI[] stepIndicatorTexts;
@@ -203,7 +198,7 @@ namespace NexA.Hub.Screens
             ShowStep(currentStep);
             
             // Log configuration status
-            if (!CHECK_TO_BACKEND)
+            if (!APIService.CHECK_TO_BACKEND)
             {
                 Debug.LogWarning("[RegisterScreenMultiStep] Username backend validation is DISABLED");
                 Debug.LogWarning("[RegisterScreenMultiStep] 🧪 TEST MODE ENABLED:");
@@ -448,12 +443,13 @@ namespace NexA.Hub.Screens
             isUsernameValid = ValidateUsername(value);
             
             // Si validation locale OK ET check backend activé, vérifier disponibilité avec debounce
-            if (isUsernameValid && CHECK_TO_BACKEND)
+            if (isUsernameValid && APIService.CHECK_TO_BACKEND)
             {
                 // Cancel previous check
                 if (usernameCheckCoroutine != null)
                 {
                     StopCoroutine(usernameCheckCoroutine);
+                    usernameCheckCoroutine = null; // Reset la référence
                 }
                 
                 // Start new debounced check avec la méthode générique
@@ -812,7 +808,7 @@ namespace NexA.Hub.Screens
         /// </summary>
         private void ShowVerificationCodeToast(bool isResend = false)
         {
-            if (!CHECK_TO_BACKEND)
+            if (!APIService.CHECK_TO_BACKEND)
             {
                 string message = isResend 
                     ? $"🔑 Nouveau code : {generatedVerificationCode}\n(Mode Test)"
@@ -835,7 +831,7 @@ namespace NexA.Hub.Screens
         {
             if (!verificationInstructionText) return;
 
-            if (!CHECK_TO_BACKEND)
+            if (!APIService.CHECK_TO_BACKEND)
             {
                 verificationInstructionText.text = $"Un code de vérification a été généré\n<b>Voir popup ci-dessus (Mode Test)</b>\nEmail: {emailField.text}";
             }
@@ -862,13 +858,50 @@ namespace NexA.Hub.Screens
             GenerateAndLogVerificationCode(isResend);
             
             // ===== ÉTAPE 2 : Envoi du code =====
-            string sendingMessage = isResend 
-                ? "Renvoi du code de vérification..."
-                : "Envoi du code de vérification...";
-            ShowLoadingWithMessage(sendingMessage);
-            
-            float sendingDelay = UnityEngine.Random.Range(MIN_SENDING_DELAY, MAX_SENDING_DELAY);
-            yield return new WaitForSeconds(sendingDelay);
+            if (APIService.CHECK_TO_BACKEND)
+            {
+                string sendingMessage = isResend 
+                    ? "Renvoi du code de vérification..."
+                    : "Envoi du code de vérification...";
+                ShowLoadingWithMessage(sendingMessage);
+                
+                // Envoi réel via l'API
+                var sendTask = APIService.Instance.SendCustomCodeAsync(emailField.text, generatedVerificationCode);
+                
+                // Attendre la complétion de la tâche
+                yield return new WaitUntil(() => sendTask.IsCompleted);
+                
+                // Vérifier le résultat après le yield
+                if (sendTask.IsFaulted || sendTask.IsCanceled)
+                {
+                    var exception = sendTask.Exception?.GetBaseException();
+                    string errorMessage = exception?.Message ?? "Erreur inconnue lors de l'envoi du code";
+                    
+                    Debug.LogError($"❌ Erreur lors de l'envoi du code : {errorMessage}");
+                    if (exception != null)
+                    {
+                        Debug.LogException(exception);
+                    }
+                    
+                    HideLoading();
+                    ToastManager.Show($"Impossible d'envoyer le code: {errorMessage}", ToastType.Error);
+                    yield break;
+                }
+                
+                // Succès
+                Debug.Log("✅ Email envoyé avec succès !");
+            }
+            else
+            {
+                // Mode test : simulation d'envoi
+                string sendingMessage = isResend 
+                    ? "Renvoi du code de vérification..."
+                    : "Envoi du code de vérification...";
+                ShowLoadingWithMessage(sendingMessage);
+                
+                float sendingDelay = UnityEngine.Random.Range(MIN_SENDING_DELAY, MAX_SENDING_DELAY);
+                yield return new WaitForSeconds(sendingDelay);
+            }
             
             HideLoading();
             ShowVerificationCodeToast(isResend);
@@ -1005,7 +1038,7 @@ namespace NexA.Hub.Screens
             string email = emailField.text;
             
             // MODE TEST : Simuler l'inscription sans appel API
-            if (!CHECK_TO_BACKEND)
+            if (!APIService.CHECK_TO_BACKEND)
             {
                 Debug.Log($"🧪 [MODE TEST] Simulation inscription pour {username}");
                 
@@ -1026,8 +1059,8 @@ namespace NexA.Hub.Screens
                 
                 yield return new WaitForSeconds(1.5f);
                 
-                // Retour au login avec email pré-rempli
-                UIManager.Instance?.ShowScreen(ScreenType.Login, email);
+                // Retour au login avec username pré-rempli
+                UIManager.Instance?.ShowScreen(ScreenType.Login, username);
                 
                 yield break; // Sortir de la coroutine
             }
@@ -1036,6 +1069,16 @@ namespace NexA.Hub.Screens
             loadingPanel.SetActive(true);
             nextButton.interactable = false;
             backButton.interactable = false;
+
+            // Logs de débogage pour comprendre le problème
+            Debug.Log($"🔍 Inscription avec :");
+            Debug.Log($"  Username: {username}");
+            Debug.Log($"  Email: {email}");
+            Debug.Log($"  Code saisi: '{verificationCodeField.text}'");
+            Debug.Log($"  Code généré: '{generatedVerificationCode}'");
+            Debug.Log($"  Codes égaux? {verificationCodeField.text == generatedVerificationCode}");
+            Debug.Log($"  Longueur code saisi: {verificationCodeField.text.Length}");
+            Debug.Log($"  Longueur code généré: {generatedVerificationCode.Length}");
 
             Task<bool> task = AuthManager.Instance.RegisterAsync(
                 username, 
@@ -1068,8 +1111,8 @@ namespace NexA.Hub.Screens
                 
                 yield return new WaitForSeconds(1.5f);
                 
-                // Retour au login avec email pré-rempli
-                UIManager.Instance?.ShowScreen(ScreenType.Login, email);
+                // Retour au login avec username pré-rempli
+                UIManager.Instance?.ShowScreen(ScreenType.Login, username);
             }
             else
             {

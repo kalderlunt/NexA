@@ -18,16 +18,27 @@ namespace NexA.Hub.Services
         public static APIService Instance { get; private set; }
 
         [Header("Configuration")]
-#if UNITY_EDITOR
-        [SerializeField] private string baseURL = "http://192.168.1.19:8080";
+//#if UNITY_EDITOR
+        [SerializeField] private string baseURL = "http://192.168.2.184";
+        [SerializeField] private string port = "8080";
 		[SerializeField] private string extAPI = "api/v1";
 		[SerializeField] private string extAPIAuth = "auth";
-#else
+/*#else
         [SerializeField] private string baseURL = "https://api.nexa.game/v1";
-#endif
+#endif*/
         [SerializeField] private int timeoutSeconds = 10;
         [SerializeField] private int maxRetries = 3;
         [SerializeField] private float retryDelaySeconds = 1f;
+        
+        [Header("Testing Mode")]
+        [Tooltip("Mode de vérification: true = backend réel, false = mode test (simulation)")]
+        [SerializeField] private bool checkToBackend = true;
+        
+        /// <summary>
+        /// Mode de vérification : true = backend, false = mode test
+        /// Accessible globalement depuis n'importe où
+        /// </summary>
+        public static bool CHECK_TO_BACKEND => Instance != null ? Instance.checkToBackend : true;
 
         private void Awake()
         {
@@ -49,9 +60,12 @@ namespace NexA.Hub.Services
             return await SendRequestAsync<AuthResponse>($"/{extAPI}/{extAPIAuth}/register", "POST", body, requiresAuth: false);
         }
 
-        public async Task<AuthResponse> LoginAsync(string email, string password)
+        public async Task<AuthResponse> LoginAsync(string username, string password)
         {
-            var body = new { email, password };
+            var body = new { username, password };
+            string bodyJson = JsonConvert.SerializeObject(body);
+            Debug.Log($"  Body JSON: {bodyJson}");
+            
             return await SendRequestAsync<AuthResponse>($"/{extAPI}/{extAPIAuth}/login", "POST", body, requiresAuth: false);
         }
 
@@ -89,8 +103,26 @@ namespace NexA.Hub.Services
         /// </summary>
         public async Task<AuthResponse> RegisterWithCodeAsync(string username, string email, string password, string verificationCode)
         {
+            Debug.Log($"[APIService] 📤 Envoi inscription avec code de vérification:");
+            Debug.Log($"  Username: {username}");
+            Debug.Log($"  Email: {email}");
+            Debug.Log($"  Verification Code: '{verificationCode}' (longueur: {verificationCode.Length})");
+            
             var body = new { username, email, password, verificationCode };
             return await SendRequestAsync<AuthResponse>($"/{extAPI}/{extAPIAuth}/register", "POST", body, requiresAuth: false);
+        }
+
+        /// <summary>
+        /// Envoie un code de vérification par email
+        /// </summary>
+        public async Task<EmptyResponse> SendCustomCodeAsync(string email, string code)
+        {
+            Debug.Log($"[APIService] 📧 Envoi du code de vérification par email:");
+            Debug.Log($"  Email: {email}");
+            Debug.Log($"  Code: '{code}' (longueur: {code.Length})");
+            
+            var body = new { email, code };
+            return await SendRequestAsync<EmptyResponse>($"/{extAPI}/{extAPIAuth}/send-custom-code", "POST", body, requiresAuth: false);
         }
 
         #endregion
@@ -174,7 +206,7 @@ namespace NexA.Hub.Services
             bool requiresAuth = true,
             int retryCount = 0)
         {
-            string url = baseURL + endpoint;
+            string url = baseURL + $":{port}" + endpoint;
             
             using (UnityWebRequest request = CreateRequest(url, method, body))
             {
@@ -247,28 +279,187 @@ namespace NexA.Hub.Services
         {
             string errorMessage = "Une erreur est survenue";
             string errorCode = "UNKNOWN_ERROR";
+            string rawResponse = "";
 
             try
             {
                 // Parser l'erreur du backend
-                string responseText = request.downloadHandler.text;
-                var errorResponse = JsonConvert.DeserializeObject<APIErrorResponse>(responseText);
+                rawResponse = request.downloadHandler.text;
+                Debug.Log($"[API] Raw error response: {rawResponse}");
+                
+                // Essayer de parser comme objet structuré
+                var errorResponse = JsonConvert.DeserializeObject<APIErrorResponse>(rawResponse);
                 
                 if (errorResponse?.error != null)
                 {
                     errorMessage = errorResponse.error.message;
                     errorCode = errorResponse.error.code;
                 }
+                else
+                {
+                    // Essayer de parser comme format simple: {"error": "message"} ou {"details": {...}, "error": "..."}
+                    try
+                    {
+                        var simpleError = JsonConvert.DeserializeObject<Dictionary<string, object>>(rawResponse);
+                        if (simpleError != null && simpleError.ContainsKey("error"))
+                        {
+                            string fullErrorMessage = simpleError["error"].ToString();
+                            
+                            // Si il y a un champ "details", extraire le premier message d'erreur
+                            if (simpleError.ContainsKey("details"))
+                            {
+                                try
+                                {
+                                    var details = JsonConvert.DeserializeObject<Dictionary<string, string>>(simpleError["details"].ToString());
+                                    if (details != null && details.Count > 0)
+                                    {
+                                        // Prendre le premier message d'erreur des détails
+                                        foreach (var detail in details)
+                                        {
+                                            fullErrorMessage = detail.Value;
+                                            break;
+                                        }
+                                    }
+                                }
+                                catch { /* Ignorer si parsing details échoue */ }
+                            }
+                            
+                            // Nettoyer le message pour l'utilisateur
+                            errorMessage = CleanErrorMessage(fullErrorMessage);
+                            errorCode = GetErrorCodeFromMessage(fullErrorMessage);
+                            
+                            Debug.Log($"[API] Parsed simple error format - Code: {errorCode}, Message: {errorMessage}");
+                        }
+                        else
+                        {
+                            errorMessage = !string.IsNullOrEmpty(rawResponse) 
+                                ? $"Réponse backend: {rawResponse}" 
+                                : $"HTTP {request.responseCode}: {request.error}";
+                        }
+                    }
+                    catch
+                    {
+                        // Si le parsing échoue, utiliser la réponse brute
+                        errorMessage = !string.IsNullOrEmpty(rawResponse) 
+                            ? $"Réponse backend: {rawResponse}" 
+                            : $"HTTP {request.responseCode}: {request.error}";
+                    }
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                // Si parsing échoue, message générique
-                errorMessage = $"HTTP {request.responseCode}: {request.error}";
+                // Si parsing échoue, message détaillé
+                Debug.LogError($"[API] Failed to parse error response: {ex.Message}");
+                errorMessage = !string.IsNullOrEmpty(rawResponse)
+                    ? $"HTTP {request.responseCode} - Réponse: {rawResponse}"
+                    : $"HTTP {request.responseCode}: {request.error}";
             }
 
             Debug.LogError($"[API] Error {errorCode} | {errorMessage} | Correlation: {correlationId}");
 
             throw new APIException(errorCode, errorMessage, (int)request.responseCode);
+        }
+        
+        /// <summary>
+        /// Nettoie un message d'erreur SQL/technique pour le rendre user-friendly
+        /// </summary>
+        private string CleanErrorMessage(string rawMessage)
+        {
+            if (string.IsNullOrEmpty(rawMessage)) return "Une erreur est survenue";
+            
+            // Détecter les erreurs de contrainte de BDD
+            if (rawMessage.Contains("clé dupliquée") || rawMessage.Contains("duplicate key"))
+            {
+                if (rawMessage.Contains("email"))
+                    return "Cet email est déjà utilisé";
+                if (rawMessage.Contains("username"))
+                    return "Ce nom d'utilisateur est déjà utilisé";
+                return "Cette valeur existe déjà dans la base de données";
+            }
+            
+            // Détecter les erreurs SQL génériques
+            if (rawMessage.Contains("could not execute statement") || rawMessage.Contains("SQL [insert"))
+            {
+                // Extraire le message utile si possible
+                if (rawMessage.Contains("Detail:"))
+                {
+                    int detailIndex = rawMessage.IndexOf("Detail:", StringComparison.Ordinal);
+                    int endIndex = rawMessage.IndexOf("]", detailIndex, StringComparison.Ordinal);
+                    if (detailIndex > 0 && endIndex > detailIndex)
+                    {
+                        string detail = rawMessage.Substring(detailIndex + 7, endIndex - detailIndex - 7).Trim();
+                        
+                        // Traduire le message
+                        if (detail.Contains("existe déjà"))
+                        {
+                            if (rawMessage.Contains("email"))
+                                return "Cet email est déjà utilisé";
+                            if (rawMessage.Contains("username"))
+                                return "Ce nom d'utilisateur est déjà utilisé";
+                        }
+                        
+                        return detail;
+                    }
+                }
+                
+                return "Erreur lors de l'enregistrement des données";
+            }
+            
+            // Si le message est déjà simple et clair, le retourner tel quel
+            if (rawMessage.Length < 200 && !rawMessage.Contains("[") && !rawMessage.Contains("SQL"))
+            {
+                return rawMessage;
+            }
+            
+            return "Une erreur est survenue lors de l'opération";
+        }
+        
+        /// <summary>
+        /// Génère un code d'erreur à partir du message d'erreur
+        /// </summary>
+        private string GetErrorCodeFromMessage(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return "UNKNOWN_ERROR";
+            
+            // Erreurs de validation de champs
+            if (message.Contains("identifiant") && message.Contains("obligatoire"))
+                return "MISSING_IDENTIFIER";
+            if (message.Contains("mot de passe") && message.Contains("obligatoire"))
+                return "MISSING_PASSWORD";
+            if (message.Contains("obligatoire"))
+                return "VALIDATION_ERROR";
+            
+            // Erreurs de contrainte de base de données
+            if (message.Contains("clé dupliquée") || message.Contains("duplicate key") || message.Contains("existe déjà"))
+            {
+                if (message.Contains("email"))
+                    return "EMAIL_ALREADY_EXISTS";
+                if (message.Contains("username"))
+                    return "USERNAME_ALREADY_EXISTS";
+                return "DUPLICATE_ENTRY";
+            }
+            
+            // Erreurs de validation
+            if (message.Contains("email") && message.Contains("déjà utilisé"))
+                return "EMAIL_ALREADY_EXISTS";
+            if (message.Contains("username") && message.Contains("déjà utilisé"))
+                return "USERNAME_ALREADY_EXISTS";
+            if (message.Contains("code") && (message.Contains("incorrect") || message.Contains("invalide")))
+                return "INVALID_CODE";
+            if (message.Contains("code") && message.Contains("expiré"))
+                return "CODE_EXPIRED";
+                
+            // Erreurs générales
+            if (message.Contains("introuvable") || message.Contains("not found"))
+                return "NOT_FOUND";
+            if (message.Contains("non autorisé") || message.Contains("unauthorized"))
+                return "UNAUTHORIZED";
+            if (message.Contains("could not execute statement") || message.Contains("SQL"))
+                return "DATABASE_ERROR";
+            if (message.Contains("invalide"))
+                return "VALIDATION_ERROR";
+                
+            return "UNKNOWN_ERROR";
         }
 
         private T ParseResponse<T>(string json)
@@ -278,17 +469,37 @@ namespace NexA.Hub.Services
 
             try
             {
+                Debug.Log($"[API] 📥 Parsing response for type: {typeof(T).Name}");
+                Debug.Log($"[API] 📄 Raw JSON: {json}");
+                
                 // Parse directement le JSON (pas de wrapper APIResponse)
                 T result = JsonConvert.DeserializeObject<T>(json);
                 
                 if (result != null)
+                {
+                    Debug.Log($"[API] ✅ Successfully parsed {typeof(T).Name}");
+                    
+                    // Log spécial pour AuthResponse pour voir les tokens
+                    if (result is AuthResponse authResponse)
+                    {
+                        Debug.Log($"[API] 🔑 Token Data:");
+                        Debug.Log($"  User: {authResponse.user?.username ?? "null"}");
+                        Debug.Log($"  Access Token: {authResponse.tokens?.accessToken?.Substring(0, Math.Min(20, authResponse.tokens.accessToken?.Length ?? 0)) ?? "null"}...");
+                        Debug.Log($"  Refresh Token: {authResponse.tokens?.refreshToken?.Substring(0, Math.Min(20, authResponse.tokens.refreshToken?.Length ?? 0)) ?? "null"}...");
+                        Debug.Log($"  Expires In: {authResponse.tokens?.expiresIn ?? 0}");
+                    }
+                    
                     return result;
+                }
 
                 throw new Exception("Failed to deserialize response");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[API] Failed to parse response: {ex.Message}\nJSON: {json}");
+                Debug.LogError($"[API] ❌ Failed to parse response: {ex.Message}");
+                Debug.LogError($"[API] JSON: {json}");
+                Debug.LogError($"[API] Expected type: {typeof(T).FullName}");
+                Debug.LogException(ex);
                 throw;
             }
         }

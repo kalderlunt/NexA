@@ -1726,10 +1726,10 @@ RectTransform:
   - {fileID: 1478223605}
   m_Father: {fileID: 311994352}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 250, y: -350}
-  m_SizeDelta: {x: 440, y: 60}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &192389619
 MonoBehaviour:
@@ -1772,7 +1772,7 @@ MonoBehaviour:
     m_SelectOnRight: {fileID: 0}
   m_Transition: 1
   m_Colors:
-    m_NormalColor: {r: 0.17254902, g: 0.17254902, b: 0.17254902, a: 1}
+    m_NormalColor: {r: 0.43041885, g: 0.34269315, b: 0.4811321, a: 1}
     m_HighlightedColor: {r: 0.35686275, g: 0.6392157, b: 0.9607843, a: 1}
     m_PressedColor: {r: 0.22745098, g: 0.47843137, b: 0.78431374, a: 1}
     m_SelectedColor: {r: 0.9607843, g: 0.9607843, b: 0.9607843, a: 1}
@@ -7546,9 +7546,9 @@ RectTransform:
   - {fileID: 2126884162}
   m_Father: {fileID: 70894543}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 190, y: -30}
   m_SizeDelta: {x: 100, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &623299351
@@ -8096,7 +8096,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Email
+  m_text: Username
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -8755,10 +8755,10 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 311994352}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 250, y: -55}
-  m_SizeDelta: {x: 440, y: 50}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &698172944
 MonoBehaviour:
@@ -9534,9 +9534,9 @@ RectTransform:
   - {fileID: 1493175388}
   m_Father: {fileID: 70894543}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 430, y: -30}
   m_SizeDelta: {x: 100, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &765462135
@@ -10428,10 +10428,10 @@ RectTransform:
   - {fileID: 595216841}
   m_Father: {fileID: 311994352}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 250, y: -195}
-  m_SizeDelta: {x: 440, y: 50}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &841482085
 MonoBehaviour:
@@ -13095,7 +13095,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &1054384175
 RectTransform:
   m_ObjectHideFlags: 0
@@ -13146,7 +13146,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dc2a968c9c18426a89ebf1160bb89d8f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NexA.Hub.Screens.LoginScreen
-  emailInput: {fileID: 1535589538}
+  usernameInput: {fileID: 1535589538}
   passwordInput: {fileID: 841482085}
   loginButton: {fileID: 2017275452}
   registerButton: {fileID: 192389620}
@@ -16350,11 +16350,11 @@ RectTransform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
+  - {fileID: 1054384175}
+  - {fileID: 2031381432}
   - {fileID: 1317946091}
   - {fileID: 2040473919}
   - {fileID: 1755054845}
-  - {fileID: 1054384175}
-  - {fileID: 2031381432}
   m_Father: {fileID: 933553815}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -20477,7 +20477,7 @@ GameObject:
   - component: {fileID: 1535589538}
   - component: {fileID: 1535589541}
   m_Layer: 5
-  m_Name: Email Input Field
+  m_Name: Username Input Field
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -20498,10 +20498,10 @@ RectTransform:
   - {fileID: 1448480239}
   m_Father: {fileID: 311994352}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 250, y: -125}
-  m_SizeDelta: {x: 440, y: 50}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1535589538
 MonoBehaviour:
@@ -20695,9 +20695,9 @@ RectTransform:
   - {fileID: 213670535}
   m_Father: {fileID: 70894543}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 70, y: -30}
   m_SizeDelta: {x: 100, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1547567048
@@ -25424,10 +25424,10 @@ RectTransform:
   - {fileID: 1353232919}
   m_Father: {fileID: 311994352}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 250, y: -270}
-  m_SizeDelta: {x: 440, y: 60}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2017275452
 MonoBehaviour:
@@ -25548,7 +25548,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &2031381432
 RectTransform:
   m_ObjectHideFlags: 0
@@ -25599,7 +25599,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c78475ee96634ce988d14e58f359da57, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NexA.Hub.Screens.RegisterScreenMultiStep
-  CHECK_TO_BACKEND: 1
   stepIndicators:
   - {fileID: 1547567048}
   - {fileID: 623299351}
@@ -26490,12 +26489,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c13c4913ab3b4dfaa2b1f1f68299b203, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NexA.Hub.Services.APIService
-  baseURL: http://192.168.1.19:8080
+  baseURL: http://192.168.2.184
+  port: 8080
   extAPI: api/v1
   extAPIAuth: auth
   timeoutSeconds: 10
   maxRetries: 3
   retryDelaySeconds: 1
+  checkToBackend: 1
 --- !u!1 &2103818133
 GameObject:
   m_ObjectHideFlags: 0
@@ -27227,9 +27228,9 @@ RectTransform:
   - {fileID: 276694949}
   m_Father: {fileID: 70894543}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0}
-  m_AnchorMax: {x: 0, y: 0}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 310, y: -30}
   m_SizeDelta: {x: 100, y: 40}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2137914429

@@ -98,6 +98,30 @@ namespace NexA.Hub.Services
 
                 AuthResponse response = await APIService.Instance.RegisterWithCodeAsync(username, email, password, verificationCode);
                 
+                // Vérifier que la réponse contient bien les données nécessaires
+                if (response == null)
+                {
+                    Debug.LogError("[AuthManager] ❌ Réponse d'inscription null !");
+                    throw new AuthException("Le serveur n'a pas retourné de réponse valide");
+                }
+                
+                Debug.Log($"[AuthManager] 📦 Réponse reçue:");
+                Debug.Log($"  - User: {(response.user != null ? response.user.username : "NULL")}");
+                Debug.Log($"  - Tokens: {(response.tokens != null ? "PRÉSENT" : "NULL ⚠️")}");
+                
+                if (response.tokens == null)
+                {
+                    Debug.LogError("[AuthManager] ❌ ERREUR CRITIQUE: Le backend n'a pas retourné de tokens !");
+                    Debug.LogError("[AuthManager] Le backend doit retourner: { user: {...}, tokens: { accessToken, refreshToken, expiresIn } }");
+                    throw new AuthException("Le serveur n'a pas retourné les tokens d'authentification. Contactez l'administrateur.");
+                }
+                
+                if (response.user == null)
+                {
+                    Debug.LogError("[AuthManager] ❌ ERREUR: Le backend n'a pas retourné les données utilisateur !");
+                    throw new AuthException("Le serveur n'a pas retourné les données utilisateur");
+                }
+                
                 StoreTokens(response.tokens);
                 CurrentUser = response.user;
 
@@ -109,9 +133,15 @@ namespace NexA.Hub.Services
                 Debug.LogError($"[AuthManager] ❌ Échec de l'inscription: {ex.Code} - {ex.Message}");
                 throw new AuthException(GetFriendlyErrorMessage(ex.Code), ex);
             }
+            catch (AuthException)
+            {
+                // Re-throw AuthException sans wrapper
+                throw;
+            }
             catch (Exception ex)
             {
                 Debug.LogError($"[AuthManager] ❌ Erreur inattendue lors de l'inscription: {ex.Message}");
+                Debug.LogException(ex);
                 throw new AuthException("Une erreur inattendue s'est produite. Veuillez réessayer.", ex);
             }
         }
@@ -119,13 +149,13 @@ namespace NexA.Hub.Services
         /// <summary>
         /// Connexion d'un utilisateur existant
         /// </summary>
-        public async Task<User> LoginAsync(string email, string password)
+        public async Task<User> LoginAsync(string username, string password)
         {
             try
             {
-                Debug.Log($"[AuthManager] Tentative de connexion pour {email}");
+                Debug.Log($"[AuthManager] Tentative de connexion pour {username}");
 
-                var response = await APIService.Instance.LoginAsync(email, password);
+                var response = await APIService.Instance.LoginAsync(username, password);
                 
                 StoreTokens(response.tokens);
                 CurrentUser = response.user;
