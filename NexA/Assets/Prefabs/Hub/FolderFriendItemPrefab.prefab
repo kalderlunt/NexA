@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 7110894382490833898}
   - component: {fileID: 6945490413357088357}
   m_Layer: 5
-  m_Name: ContentContainer
+  m_Name: Friend Container
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -259,10 +259,9 @@ GameObject:
   - component: {fileID: 8907792680874049977}
   - component: {fileID: 5218928254461896840}
   - component: {fileID: 2797154247604858589}
-  - component: {fileID: 3278418875718064751}
   - component: {fileID: 108304343919726026}
   m_Layer: 5
-  m_Name: FriendGroupContainer
+  m_Name: FolderFriendItemPrefab
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -329,22 +328,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ContentSizeFitter
   m_HorizontalFit: 0
   m_VerticalFit: 2
---- !u!114 &3278418875718064751
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5133106212313171786}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 68f821b007b046129d62ec5cd2c4a83d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NexA.Hub.Components.FriendFolderItem
-  headerButton: {fileID: 2912478546123674418}
-  folderLabel: {fileID: 6002255307998502080}
-  arrowIcon: {fileID: 4521270021092285306}
-  contentContainer: {fileID: 4097147605536307149}
 --- !u!114 &108304343919726026
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -364,7 +347,7 @@ MonoBehaviour:
   countLabel: {fileID: 4928696249025332861}
   arrowIcon: {fileID: 4521270021092285306}
   deleteButton: {fileID: 0}
-  contentContainer: {fileID: 4097147605536307149}
+  friendContainer: {fileID: 4097147605536307149}
   animationDuration: 0.18
   backgroundImage: {fileID: 6141629019294802327}
   normalColor: {r: 0.32941177, g: 0.32941177, b: 0.32941177, a: 1}

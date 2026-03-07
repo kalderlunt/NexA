@@ -3,6 +3,8 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using DG.Tweening;
+using NexA.Hub.Services;
+using NexA.Hub.Models;
 
 namespace NexA.Hub.Components
 {
@@ -49,7 +51,7 @@ namespace NexA.Hub.Components
             foreach (Transform child in itemsContainer)
                 Destroy(child.gameObject);
 
-            var groups = SocialPanel.Instance?.GetAllGroups() ?? new List<FriendGroupContainer>();
+            HashSet<FriendFolderContainer> groups = SocialPanel.Instance?.GetAllGroups() ?? new HashSet<FriendFolderContainer>();
             AddSectionLabel("Deplacer vers");
 
             if (groups.Count == 0)
@@ -58,15 +60,15 @@ namespace NexA.Hub.Components
             }
             else
             {
-                foreach (FriendGroupContainer g in groups)
+                foreach (FriendFolderContainer g in groups)
                 {
-                    bool cur = targetRow != null && targetRow.transform.parent == g.contentContainer;
-                    FriendGroupContainer cap = g;
+                    bool cur = targetRow != null && targetRow.transform.parent == g.friendContainer;
+                    FriendFolderContainer cap = g;
                     AddEntry("  " + g.GroupName, () => MoveToGroup(cap), !cur);
                 }
             }
 
-            if (targetRow && targetRow.GetComponentInParent<FriendGroupContainer>())
+            if (targetRow && targetRow.GetComponentInParent<FriendFolderContainer>())
             {
                 AddSeparator();
                 AddEntry("Retirer du groupe", RemoveFromGroup);
@@ -140,22 +142,68 @@ namespace NexA.Hub.Components
             btn.colors = c;
         }
 
-        private void MoveToGroup(FriendGroupContainer group)
+        private async void MoveToGroup(FriendFolderContainer folder)
         {
-            if (!targetRow || !group)
+            if (!targetRow || !folder)
                 return;
-            
-            group.AddRow(targetRow.gameObject);
+
+            // Appel API avant le déplacement visuel
+            if (!string.IsNullOrEmpty(folder.FolderId) && !string.IsNullOrEmpty(targetRow.FriendshipId))
+            {
+                try
+                {
+                    await APIService.Instance.AssignFriendToFolderAsync(folder.FolderId, targetRow.FriendshipId);
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError($"[FriendContextMenu] Erreur déplacement ami : {ex.Message}");
+                    ToastManager.Show("Erreur lors du déplacement", ToastType.Error);
+                    return;
+                }
+            }
+
+            // Source
+            FriendFolderContainer source = targetRow.transform.parent?.GetComponentInParent<FriendFolderContainer>();
+            source?.RemoveRow(targetRow.gameObject);
+
+            folder.AddRow(targetRow.gameObject);
         }
 
-        private void RemoveFromGroup()
+        private async void RemoveFromGroup()
         {
             if (!targetRow) 
                 return;
-            
-            Transform container = SocialPanel.Instance?.FriendsContainer;
-            if (container)
-                targetRow.transform.SetParent(container, false);
+
+            FriendFolderContainer defaultFolder = SocialPanel.Instance?.DefaultFolderPublic;
+
+            // Appel API pour déplacer vers le dossier par défaut
+            if (defaultFolder != null && !string.IsNullOrEmpty(defaultFolder.FolderId)
+                && !string.IsNullOrEmpty(targetRow.FriendshipId))
+            {
+                try
+                {
+                    await APIService.Instance.AssignFriendToFolderAsync(defaultFolder.FolderId, targetRow.FriendshipId);
+                }
+                catch (System.Exception ex)
+                {
+                    Debug.LogError($"[FriendContextMenu] Erreur retrait de groupe : {ex.Message}");
+                    ToastManager.Show("Erreur lors du retrait", ToastType.Error);
+                    return;
+                }
+            }
+
+            FriendFolderContainer source = targetRow.transform.parent?.GetComponentInParent<FriendFolderContainer>();
+            source?.RemoveRow(targetRow.gameObject);
+
+            if (defaultFolder)
+                defaultFolder.AddRow(targetRow.gameObject);
+            else
+            {
+                Transform container = SocialPanel.Instance?.FriendsContainer;
+                if (container)
+                    targetRow.transform.SetParent(container, false);
+            }
+
             SocialPanel.Instance?.RefreshGroupHeaders();
         }
 

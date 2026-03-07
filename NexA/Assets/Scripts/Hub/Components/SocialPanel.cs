@@ -8,6 +8,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using TMPro;
 using UnityEngine;
+using UnityEngine.Assertions;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace NexA.Hub.Components
@@ -50,14 +52,13 @@ namespace NexA.Hub.Components
         // ── Corps (liste) ──────────────────────────────────────────────
         [Header("Corps — liste des amis")]
         [SerializeField] private Transform friendsContainer;
+        [SerializeField] private GameObject folderFriendItemPrefab; // prefab pour dossiers (GÉNÉRAL, custom, hors ligne)
         [SerializeField] private GameObject friendItemPrefab;
-        [SerializeField] private GameObject friendGroupContainerPrefab; // prefab pour groupes CUSTOM uniquement
-        [SerializeField] private GameObject offlineFolderPrefab;
-        [SerializeField] private TextMeshProUGUI headerCountText;
         [SerializeField] private TextMeshProUGUI emptyText;
 
-        [Header("Groupe GÉNÉRAL (assigné directement dans la scène)")]
-        [SerializeField] private FriendGroupContainer generalGroup; // glisser le GO Default(General)-Folder ici
+        [Header("Folders (assignés directement dans la scène)")]
+        private FriendFolderContainer generalFolder;  // Default(General) - Folder
+        private FriendFolderContainer offlineFolder;  // dossier Hors ligne (toujours en scène, caché par défaut)
 
         // ── Propriété publique ─────────────────────────────────────────
         public Transform FriendsContainer => friendsContainer;
@@ -66,7 +67,7 @@ namespace NexA.Hub.Components
         [Header("Bottom bar")]
         [SerializeField] private Button messagingButton;
         [SerializeField] private Button objectivesButton;       // désactivé
-        [SerializeField] private Button micButton;              // désactivé
+        [SerializeField] private Button microButton;              // désactivé
         [SerializeField] private TextMeshProUGUI versionText;   // ex: "26.03"
         [SerializeField] private Button bugButton;
 
@@ -75,13 +76,18 @@ namespace NexA.Hub.Components
         [SerializeField] private CanvasGroup canvasGroup;
 
         // ── État interne ───────────────────────────────────────────────
-        private List<Friend> cachedFriends = new();
-        private List<FolderDetail> cachedFolders = new();
+        private List<FolderDetail>          cachedFolders = new();
         private bool sortByAlpha = false;
         private bool groupOffline = false;
         private bool optionsOpen = false;
-        // defaultGroup = alias vers generalGroup (assigné dans l'Inspector, jamais instancié dynamiquement)
-        private FriendGroupContainer defaultGroup => generalGroup;
+
+        // Source de vérité pour tous les dossiers actifs (GÉNÉRAL + custom)
+        private readonly HashSet<FriendFolderContainer> activeFolders = new();
+
+        private FriendFolderContainer DefaultFolder => generalFolder;
+
+        /// <summary>Dossier GÉNÉRAL accessible par FriendFolderContainer pour la migration d'amis.</summary>
+        public FriendFolderContainer DefaultFolderPublic => generalFolder;
 
         // ── Awake / Start ──────────────────────────────────────────────
 
@@ -98,7 +104,7 @@ namespace NexA.Hub.Components
         private void Start()
         {
             addFriendButton?.onClick.AddListener(OnAddFriendClicked);
-            addGroupButton?.onClick.AddListener(OnAddGroupClicked);
+            addGroupButton?.onClick.AddListener(OnAddFolderClicked);
             optionsButton?.onClick.AddListener(ToggleOptionsDropdown);
             searchButton?.onClick.AddListener(OnSearchClicked);
 
@@ -108,26 +114,32 @@ namespace NexA.Hub.Components
 
             messagingButton?.onClick.AddListener(OnMessagingClicked);
             objectivesButton?.onClick.AddListener(OnDisabledFeatureClicked);
-            micButton?.onClick.AddListener(OnDisabledFeatureClicked);
+            microButton?.onClick.AddListener(OnDisabledFeatureClicked);
             bugButton?.onClick.AddListener(OnBugReportClicked);
 
             SetButtonDisabled(objectivesButton);
-            SetButtonDisabled(micButton);
+            SetButtonDisabled(microButton);
 
-            if (versionText != null)
+            if (versionText)
                 versionText.text = "";
 
-            if (optionsDropdown != null)
+            if (optionsDropdown)
                 optionsDropdown.SetActive(false);
+            
+            CreateDefaultFolders();
+            // Show() est appelé par HomeScreen.ShowAsync — pas besoin de le rappeler ici
+        }
 
-            // Valider que le groupe GÉNÉRAL est bien assigné dans l'Inspector
-            if (generalGroup == null)
-                Debug.LogError("[SocialPanel] 'General Group' non assigné dans l'Inspector ! Glisser le GO Default(General)-Folder.");
-            else
-                generalGroup.Init("GÉNÉRAL", asDefault: true);
+        private void CreateDefaultFolders()
+        {
+            generalFolder = CreateFolder();
+            Assert.IsNotNull(generalFolder, "[SocialPanel] 'generalFolder' est null après assignment.");
+            generalFolder.Init("GENERAL", asDefault: true);
 
-            Show();
-            //Hide(instant: true);
+            offlineFolder = CreateFolder();
+            Assert.IsNotNull(offlineFolder, "[SocialPanel] 'offlineFolder' est null après assignment.");
+            offlineFolder.Init("OFFLINE", asDefault: true);
+            offlineFolder.Hide();
         }
 
         // ── Public API ─────────────────────────────────────────────────
@@ -135,7 +147,7 @@ namespace NexA.Hub.Components
         /// <summary>Affiche le numéro de version depuis la BDD. Ex: SetVersion("26.03")</summary>
         public void SetVersion(string version)
         {
-            if (versionText != null)
+            if (versionText)
                 versionText.text = version;
         }
 
@@ -177,16 +189,6 @@ namespace NexA.Hub.Components
             try
             {
                 cachedFolders = await APIService.Instance.GetAllFoldersWithFriendsAsync();
-
-                // Cache plat pour compatibilité
-                cachedFriends = new List<Friend>();
-                HashSet<string> seen = new System.Collections.Generic.HashSet<string>();
-                foreach (var folder in cachedFolders)
-                    if (folder?.friends != null)
-                        foreach (var entry in folder.friends)
-                            if (entry?.friend != null && seen.Add(entry.friend.id))
-                                cachedFriends.Add(entry.friend);
-
                 RebuildList();
             }
             catch (System.Exception ex)
@@ -199,35 +201,57 @@ namespace NexA.Hub.Components
 
         private void RebuildList()
         {
-            if (generalGroup == null)
+            if (!generalFolder)
             {
                 Debug.LogError("[SocialPanel] generalGroup non assigné !");
                 return;
             }
 
-            // ── 1. Supprimer les groupes CUSTOM et dossiers temporaires ──
-            // On collecte d'abord pour ne pas modifier friendsContainer pendant l'itération.
-            var toDestroy = new List<GameObject>();
+            // ── 1. Supprimer les groupes CUSTOM ──────────────────────
+            HashSet<GameObject> toDestroy = new();
+            
             foreach (Transform child in friendsContainer)
             {
-                // Ignorer le groupe GÉNÉRAL (il est fixe dans la scène)
-                if (child.gameObject == generalGroup.gameObject) continue;
+                if (child.gameObject == generalFolder.gameObject) 
+                    continue;
+                
+                if (offlineFolder && child.gameObject == offlineFolder.gameObject)
+                    continue;
 
-                var g = child.GetComponent<FriendGroupContainer>();
-                if (g != null) { toDestroy.Add(child.gameObject); continue; }
-
-                var f = child.GetComponent<FriendFolderItem>();
-                if (f != null) { toDestroy.Add(child.gameObject); continue; }
+                if (child.GetComponent<FriendFolderContainer>())
+                    toDestroy.Add(child.gameObject);
             }
-            foreach (var go in toDestroy)
+
+            foreach (GameObject go in toDestroy)
+            {
+                FriendFolderContainer fc = go.GetComponent<FriendFolderContainer>();
+                if (fc) 
+                    activeFolders.Remove(fc);
                 Destroy(go);
+            }
 
             // ── 2. Vider le contenu du groupe GÉNÉRAL ──────────────────
-            var generalChildren = new List<GameObject>();
-            foreach (Transform child in generalGroup.contentContainer)
+            HashSet<GameObject> generalChildren = new();
+            
+            foreach (Transform child in generalFolder.friendContainer)
                 generalChildren.Add(child.gameObject);
-            foreach (var go in generalChildren)
+            
+            foreach (GameObject go in generalChildren)
                 Destroy(go);
+
+            // ── 3. Vider et masquer le dossier Hors ligne ──────────────
+            if (offlineFolder)
+            {
+                HashSet<GameObject> offlineChildren = new();
+                
+                foreach (Transform child in offlineFolder.friendContainer)
+                    offlineChildren.Add(child.gameObject);
+                
+                foreach (GameObject go in offlineChildren)
+                    Destroy(go);
+                
+                offlineFolder.Hide();
+            }
 
             int totalFriends = 0;
             int totalOnline  = 0;
@@ -239,122 +263,94 @@ namespace NexA.Hub.Components
             if (cachedFolders != null && cachedFolders.Count > 0)
             {
                 // ── Affichage par dossiers backend ──────────────────────
-                foreach (var folder in cachedFolders)
+                foreach (FolderDetail folder in cachedFolders)
                 {
-                    if (folder?.friends == null) continue;
+                    if (folder?.friendsList == null) 
+                        continue;
 
                     // Déterminer le container cible
                     Transform target;
-                    FriendGroupContainer groupComp;
+                    FriendFolderContainer folderContainer;
 
                     if (folder.isDefault)
                     {
-                        groupComp = defaultGroup;
-                        target    = defaultGroup.contentContainer;
+                        folderContainer = DefaultFolder;
+                        target    = DefaultFolder.friendContainer;
+                        // Stocker l'ID backend du dossier par défaut
+                        DefaultFolder.FolderId = folder.id;
                         // Header du groupe GÉNÉRAL
-                        cursor = groupComp.AnimateHeaderIn(cursor);
+                        cursor = folderContainer.AnimateHeaderIn(cursor);
                         cursor += 0.04f;
                     }
                     else
                     {
-                        if (!friendGroupContainerPrefab)
+                        if (!folderFriendItemPrefab)
                         {
-                            groupComp = defaultGroup;
-                            target    = defaultGroup.contentContainer;
+                            folderContainer = DefaultFolder;
+                            target     = DefaultFolder.friendContainer;
                         }
                         else
                         {
-                            GameObject go = Instantiate(friendGroupContainerPrefab, friendsContainer);
-                            groupComp = go.GetComponent<FriendGroupContainer>();
-                            groupComp?.Init(folder.name, asDefault: false);
-                            target = groupComp?.contentContainer ?? friendsContainer;
+                            folderContainer = CreateFolder();
+                            folderContainer?.Init(folder.name, asDefault: false, folderId: folder.id);
+                            target = folderContainer?.friendContainer ?? friendsContainer;
                         }
+                        
                         // Header du dossier custom
-                        cursor = groupComp.AnimateHeaderIn(cursor);
+                        cursor = folderContainer.AnimateHeaderIn(cursor);
                         cursor += 0.04f;
                     }
 
                     // Séparer en ligne / hors ligne dans ce dossier
-                    List<Friend> online  = folder.friends
-                        .Where(e => e?.friend != null &&
+                    List<FolderFriendEntry> onlineEntries  = folder.friendsList
+                        .Where(e => e.friend != null &&
                                (e.friend.StatusNormalized == "online" || e.friend.StatusNormalized == "in-game"))
-                        .Select(e => e.friend).ToList();
-                    List<Friend> offline = folder.friends
-                        .Where(e => e?.friend != null && e.friend.StatusNormalized == "offline")
-                        .Select(e => e.friend).ToList();
+                        .ToList();
 
-                    SortList(online);
-                    SortList(offline);
+                    List<FolderFriendEntry> offlineEntries = folder.friendsList
+                        .Where(e => e.friend != null && e.friend.StatusNormalized == "offline")
+                        .ToList();
 
-                    foreach (var friend in online)
+                    // Trier
+                    List<Friend> onlineFriends  = onlineEntries.Select(e => e.friend).ToList();
+                    List<Friend> offlineFriends = offlineEntries.Select(e => e.friend).ToList();
+                    SortList(onlineFriends);
+                    SortList(offlineFriends);
+
+                    // Reconstruire les listes d'entrées triées (pour garder le friendshipId)
+                    Dictionary<string, string> friendshipIdMap = new();
+                    foreach (FolderFriendEntry e in folder.friendsList)
+                        if (e.friend != null)
+                            friendshipIdMap[e.friend.id] = e.friendshipId;
+
+                    foreach (Friend friend in onlineFriends)
                     {
-                        FriendSidePanelRow row = SpawnFriendRow(friend, target);
+                        friendshipIdMap.TryGetValue(friend.id, out string fid);
+                        FriendSidePanelRow row = CreateFriendRow(friend, target, fid);
                         cursor = row.AnimateIn(cursor);
                         cursor += 0.04f;
                         totalOnline++;
                     }
 
-                    if (groupOffline && offline.Count > 0)
+                    if (groupOffline && offlineFriends.Count > 0)
                     {
-                        cursor = SpawnOfflineFolder(offline, friendsContainer, cursor);
+                        cursor = ShowOfflineFolder(offlineFriends, friendshipIdMap, friendsContainer, cursor);
                         cursor += 0.04f;
                     }
                     else
                     {
-                        foreach (var friend in offline)
+                        foreach (Friend friend in offlineFriends)
                         {
-                            FriendSidePanelRow row = SpawnFriendRow(friend, target);
+                            friendshipIdMap.TryGetValue(friend.id, out string fid);
+                            FriendSidePanelRow row = CreateFriendRow(friend, target, fid);
                             cursor = row.AnimateIn(cursor);
                             cursor += 0.04f;
                         }
                     }
 
-                    totalFriends += folder.friends.Count;
-                    groupComp?.RefreshCount(online.Count, folder.friends.Count);
+                    totalFriends += folder.friendsList.Count;
+                    folderContainer?.RefreshCount(onlineFriends.Count, folder.friendsList.Count);
                 }
-            }
-            else
-            {
-                // ── Fallback : affichage plat si pas de dossiers ────────
-                List<Friend> online  = cachedFriends.Where(f => f.StatusNormalized == "online" || f.StatusNormalized == "in-game").ToList();
-                List<Friend> offline = cachedFriends.Where(f => f.StatusNormalized == "offline").ToList();
-
-                SortList(online);
-                SortList(offline);
-
-                Transform target = defaultGroup?.contentContainer ?? friendsContainer;
-
-                // Header GÉNÉRAL
-                if (defaultGroup != null)
-                {
-                    cursor = defaultGroup.AnimateHeaderIn(cursor);
-                    cursor += 0.04f;
-                }
-
-                foreach (var friend in online)
-                {
-                    FriendSidePanelRow row = SpawnFriendRow(friend, target);
-                    cursor = row.AnimateIn(cursor);
-                    cursor += 0.04f;
-                    totalOnline++;
-                }
-
-                if (groupOffline && offline.Count > 0)
-                {
-                    cursor = SpawnOfflineFolder(offline, target, cursor);
-                }
-                else
-                {
-                    foreach (var friend in offline)
-                    {
-                        FriendSidePanelRow row = SpawnFriendRow(friend, target);
-                        cursor = row.AnimateIn(cursor);
-                        cursor += 0.04f;
-                    }
-                }
-
-                totalFriends = cachedFriends.Count;
-                defaultGroup?.RefreshCount(totalOnline, totalFriends);
             }
 
             if (emptyText)
@@ -377,35 +373,58 @@ namespace NexA.Hub.Components
                 });
         }
 
-        private FriendSidePanelRow SpawnFriendRow(Friend friend, Transform target = null)
+        private FriendFolderContainer CreateFolder()
+        {
+            
+            Assert.IsNotNull(folderFriendItemPrefab, "[SocialPanel] friendsContainer doit être assigné dans l'Inspector.");
+            FriendFolderContainer folder = Instantiate(folderFriendItemPrefab, friendsContainer).GetComponent<FriendFolderContainer>();
+            Assert.IsNotNull(folder, "[SocialPanel] Le prefab 'folderFriendItemPrefab' doit avoir un composant FriendFolderContainer.");
+            Debug.Log($"[SocialPanel] Création d'un nouveau dossier d'amis {folder.gameObject.name}");
+
+            activeFolders.Add(folder);
+
+            return folder;
+        }
+        
+        private FriendSidePanelRow CreateFriendRow(Friend friend, Transform target = null, string friendshipId = null)
         {
             Transform parent = target ? target : friendsContainer;
             GameObject go = Instantiate(friendItemPrefab, parent);
-            go.name = friend.username;  // nom du GO = pseudo de l'ami
-            go.GetComponent<FriendSidePanelRow>()?.Setup(friend);
-            return go.GetComponent<FriendSidePanelRow>();
+            go.name = $"Friend - {friend.username}";
+            FriendSidePanelRow row = go.GetComponent<FriendSidePanelRow>();
+            row?.Setup(friend, friendshipId);
+            return row;
         }
 
-        private float SpawnOfflineFolder(List<Friend> offlineFriends, Transform target, float cursor)
+        private float ShowOfflineFolder(List<Friend> offlineFriends, Dictionary<string, string> friendshipIdMap, Transform target, float cursor)
         {
-            if (!offlineFolderPrefab)
+            if (!offlineFolder)
             {
-                foreach (var f in offlineFriends)
-                {
-                    FriendSidePanelRow row = SpawnFriendRow(f, target);
-                    cursor = row.AnimateIn(cursor);
-                    cursor += 0.04f;
-                }
+                Debug.LogError("[SocialPanel] offlineFolder non assigné !");
                 return cursor;
             }
 
-            GameObject folder = Instantiate(offlineFolderPrefab, target);
-            if (folder.TryGetComponent<FriendFolderItem>(out var folderComp))
+            // S'assurer qu'il est bien enfant du bon container
+            offlineFolder.transform.SetParent(target, worldPositionStays: false);
+            offlineFolder.Show();
+
+            // Mettre à jour le titre avec le bon count (sans toucher à l'alpha)
+            offlineFolder.Rename($"Hors ligne ({offlineFriends.Count})");
+
+            // Animer le header dans le curseur global
+            cursor = offlineFolder.AnimateHeaderIn(cursor);
+            cursor += 0.04f;
+
+            // Peupler et animer les rows
+            foreach (Friend friend in offlineFriends)
             {
-                folderComp.Setup($"Hors ligne ({offlineFriends.Count})", offlineFriends, friendItemPrefab);
-                cursor = folderComp.AnimateIn(cursor);
+                string fid = null;
+                friendshipIdMap?.TryGetValue(friend.id, out fid);
+                FriendSidePanelRow row = CreateFriendRow(friend, offlineFolder.friendContainer, fid);
+                cursor = row.AnimateIn(cursor);
                 cursor += 0.04f;
             }
+
             return cursor;
         }
 
@@ -420,13 +439,15 @@ namespace NexA.Hub.Components
 
         private void ToggleOptionsDropdown()
         {
+            Deselect();
             optionsOpen = !optionsOpen;
-            if (optionsDropdown != null)
+            if (optionsDropdown)
                 optionsDropdown.SetActive(optionsOpen);
         }
 
         private void OnSortAlphaClicked()
         {
+            Deselect();
             sortByAlpha = true;
             CloseDropdown();
             RebuildList();
@@ -435,6 +456,7 @@ namespace NexA.Hub.Components
 
         private void OnSortStatusClicked()
         {
+            Deselect();
             sortByAlpha = false;
             CloseDropdown();
             RebuildList();
@@ -443,6 +465,7 @@ namespace NexA.Hub.Components
 
         private void OnGroupOfflineClicked()
         {
+            Deselect();
             groupOffline = !groupOffline;
             CloseDropdown();
             RebuildList();
@@ -452,56 +475,66 @@ namespace NexA.Hub.Components
         private void CloseDropdown()
         {
             optionsOpen = false;
-            if (optionsDropdown != null) optionsDropdown.SetActive(false);
+            if (optionsDropdown) 
+                optionsDropdown.SetActive(false);
         }
 
         // ── Boutons ────────────────────────────────────────────────────
 
-        private void OnAddFriendClicked()   => UIManager.Instance.ShowScreen(ScreenType.Friends);
-
-        private void OnAddGroupClicked()
+        private void OnAddFriendClicked()
         {
-            if (!friendGroupContainerPrefab)
+            Deselect();
+            UIManager.Instance.ShowScreen(ScreenType.Friends);
+        }
+
+        private async void OnAddFolderClicked()
+        {
+            Deselect();
+            if (!folderFriendItemPrefab)
             {
-                ToastManager.Show("Prefab FriendGroupContainer manquant", ToastType.Warning);
+                ToastManager.Show("Prefab manquant", ToastType.Warning);
                 return;
             }
 
-            // Compter uniquement les groupes custom (pas le GÉNÉRAL)
-            int customCount = GetAllGroups().Count(g => !g.IsDefault);
-            GameObject go = Instantiate(friendGroupContainerPrefab, friendsContainer);
-            FriendGroupContainer group = go.GetComponent<FriendGroupContainer>();
-            group?.Init($"Groupe {customCount + 1}", asDefault: false);
+            int customCount = activeFolders.Count(f => !f.IsDefault);
+            string folderName = $"Groupe {customCount + 1}";
+
+            // Créer côté backend d'abord pour obtenir l'ID
+            string folderId = null;
+            try
+            {
+                FolderSummary created = await APIService.Instance.CreateFolderAsync(folderName);
+                folderId = created?.id;
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"[SocialPanel] Erreur création dossier : {ex.Message}");
+                ToastManager.Show("Erreur lors de la création du dossier", ToastType.Error);
+                return;
+            }
+
+            FriendFolderContainer folder = CreateFolder();
+            folder?.Init(folderName, asDefault: false, folderId: folderId);
+            folder?.AnimateHeaderIn();
         }
 
-        private void OnSearchClicked()      => UIManager.Instance.ShowScreen(ScreenType.Friends);
-        private void OnMessagingClicked()   => ToastManager.Show("Messagerie — bientôt disponible", ToastType.Info);
-        private void OnDisabledFeatureClicked() => ToastManager.Show("Fonctionnalité en cours de développement", ToastType.Warning);
-        private void OnBugReportClicked()   => ToastManager.Show("Signalement de bug — en développement", ToastType.Warning);
+        private void OnSearchClicked()          { Deselect(); UIManager.Instance.ShowScreen(ScreenType.Friends); }
+        private void OnMessagingClicked()       { Deselect(); ToastManager.Show("Messagerie — bientôt disponible", ToastType.Info); }
+        private void OnDisabledFeatureClicked() { Deselect(); ToastManager.Show("Fonctionnalité en cours de développement", ToastType.Warning); }
+        private void OnBugReportClicked()       { Deselect(); ToastManager.Show("Signalement de bug — en développement", ToastType.Warning); }
+
+        /// <summary>Désélectionne le bouton actif pour éviter le highlight persistant après clic.</summary>
+        private static void Deselect() => EventSystem.current?.SetSelectedGameObject(null);
 
         // ── API publique groupes ───────────────────────────────────────
 
-        /// <summary>Retourne tous les FriendGroupContainer actifs dans friendsContainer.</summary>
-        public List<FriendGroupContainer> GetAllGroups()
-        {
-            List<FriendGroupContainer> result = new List<FriendGroupContainer>();
-            
-            if (friendsContainer == null)
-                return result;
-            
-            foreach (Transform child in friendsContainer)
-            {
-                FriendGroupContainer container = child.GetComponent<FriendGroupContainer>();
-                if (container) 
-                    result.Add(container);
-            }
-            return result;
-        }
+        /// <summary>Retourne tous les dossiers actifs (GÉNÉRAL + custom).</summary>
+        public HashSet<FriendFolderContainer> GetAllGroups() => activeFolders;
 
-        /// <summary>Met à jour les compteurs de tous les groupes après un déplacement.</summary>
+        /// <summary>Met à jour les labels de tous les dossiers après un drag & drop.</summary>
         public void RefreshGroupHeaders()
         {
-            foreach (FriendGroupContainer container in GetAllGroups())
+            foreach (FriendFolderContainer container in activeFolders)
                 container.RefreshDisplay();
         }
 
@@ -529,8 +562,11 @@ namespace NexA.Hub.Components
             groupOfflineButton?.onClick.RemoveAllListeners();
             messagingButton?.onClick.RemoveAllListeners();
             objectivesButton?.onClick.RemoveAllListeners();
-            micButton?.onClick.RemoveAllListeners();
+            microButton?.onClick.RemoveAllListeners();
             bugButton?.onClick.RemoveAllListeners();
+
+            foreach (FriendFolderContainer folder in activeFolders)
+                Destroy(folder.gameObject);
         }
     }
 }

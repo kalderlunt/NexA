@@ -33,6 +33,15 @@ namespace NexA.Hub.Components
         // Chaque row a son propre CanvasGroup pour le fade-in
         private CanvasGroup cg;
 
+        /// <summary>Vrai si l'ami est en ligne ou en jeu (utilisé par FriendFolderContainer pour les compteurs).</summary>
+        public bool IsOnline { get; private set; }
+
+        /// <summary>ID de l'amitié (friendshipId) — nécessaire pour les appels API de déplacement de dossier.</summary>
+        public string FriendshipId { get; private set; }
+
+        /// <summary>ID de l'ami (userId) — nécessaire pour suppression.</summary>
+        public string FriendId { get; private set; }
+
         private void Awake()
         {
             // CanvasGroup pour le fade-in
@@ -44,13 +53,16 @@ namespace NexA.Hub.Components
                 gameObject.AddComponent<FriendRowDragHandler>();
         }
 
-        public void Setup(Friend friend)
+        public void Setup(Friend friend, string friendshipId = null)
         {
-            // Pseudo
+            FriendId     = friend.id;
+            FriendshipId = friendshipId;
+
             if (usernameText)
                 usernameText.text = friend.username;
 
-            // Utiliser StatusNormalized pour gérer les majuscules du backend ("ONLINE", "OFFLINE", "IN_GAME")
+            IsOnline = friend.StatusNormalized == "online" || friend.StatusNormalized == "in-game";
+
             switch (friend.StatusNormalized)
             {
                 case "online":

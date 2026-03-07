@@ -190,28 +190,20 @@ namespace NexA.Hub.Services
         /// </summary>
         public async Task<List<Friend>> GetFriendsAsync()
         {
-            var folders = await GetFolderListAsync();
-            var result  = new List<Friend>();
+            List<FolderSummary> folders = await GetFolderListAsync();
+            HashSet<string>     seen    = new();
+            List<Friend>        deduped = new();
 
-            foreach (var folder in folders)
+            foreach (FolderSummary folder in folders)
             {
-                var detail = await GetFolderDetailAsync(folder.id);
-                if (detail?.friends == null) continue;
-                foreach (var entry in detail.friends)
-                {
-                    if (entry?.friend != null)
-                        result.Add(entry.friend);
-                }
+                FolderDetail detail = await GetFolderDetailAsync(folder.id);
+                if (detail?.friendsList == null) continue;
+
+                foreach (FolderFriendEntry entry in detail.friendsList)
+                    if (entry?.friend != null && seen.Add(entry.friend.id))
+                        deduped.Add(entry.friend);
             }
 
-            // Dédoublonner si un ami apparaît dans plusieurs dossiers
-            var seen = new System.Collections.Generic.HashSet<string>();
-            var deduped = new List<Friend>();
-            foreach (var f in result)
-            {
-                if (seen.Add(f.id))
-                    deduped.Add(f);
-            }
             return deduped;
         }
 

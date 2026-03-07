@@ -12,6 +12,9 @@ namespace NexA.Hub.Components
     {
         public static FriendRowDragHandler CurrentlyDragged { get; set; }
 
+        /// <summary>FriendshipId délégué au FriendSidePanelRow du même GameObject.</summary>
+        public string FriendshipId => GetComponent<FriendSidePanelRow>()?.FriendshipId;
+
         private CanvasGroup   cg;
         private Transform     originalParent;
         private int           originalSiblingIndex;

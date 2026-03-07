@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace NexA.Hub.Models
 {
@@ -63,7 +64,9 @@ namespace NexA.Hub.Models
         public string name;
         public bool   isDefault;
         public string createdAt;
-        public List<FolderFriendEntry> friends;
+
+        [JsonProperty("friends")]
+        public List<FolderFriendEntry> friendsList;
     }
 
     // ── Legacy models (garde la compatibilité) ─────────────────────
