@@ -224,32 +224,58 @@ namespace NexA.Hub.Services
 
         // ── Friend Requests ────────────────────────────────────────────
 
-        public async Task<List<FriendRequest>> GetFriendRequestsAsync()
-        {
-            return await SendRequestAsync<List<FriendRequest>>($"/{extAPI}/friends/requests", "GET");
-        }
-
+        /// <summary>
+        /// Envoie une demande d'ami (POST /api/v1/friends/request).
+        /// Le body attend { friendId: uuid }
+        /// </summary>
         public async Task<FriendRequest> SendFriendRequestAsync(string targetUserId)
         {
-            var body = new { targetUserId };
+            var body = new { friendId = targetUserId };
             return await SendRequestAsync<FriendRequest>($"/{extAPI}/friends/request", "POST", body);
         }
 
-        public async Task<FriendshipResponse> AcceptFriendRequestAsync(string requestId)
+        /// <summary>
+        /// Récupère les demandes d'ami reçues en attente (GET /api/v1/friends/pending).
+        /// </summary>
+        public async Task<List<PendingFriendRequest>> GetPendingRequestsAsync()
         {
-            var body = new { requestId };
-            return await SendRequestAsync<FriendshipResponse>($"/{extAPI}/friends/accept", "POST", body);
+            return await SendRequestAsync<List<PendingFriendRequest>>($"/{extAPI}/friends/pending", "GET");
         }
 
-        public async Task DeclineFriendRequestAsync(string requestId)
+        /// <summary>
+        /// Accepte une demande d'ami (POST /api/v1/friends/{friendshipId}/accept).
+        /// </summary>
+        public async Task AcceptFriendRequestAsync(string friendshipId)
         {
-            var body = new { requestId };
-            await SendRequestAsync<EmptyResponse>($"/{extAPI}/friends/decline", "POST", body);
+            await SendRequestAsync<EmptyResponse>($"/{extAPI}/friends/{friendshipId}/accept", "POST");
         }
 
-        public async Task RemoveFriendAsync(string userId)
+        /// <summary>
+        /// Refuse une demande d'ami (POST /api/v1/friends/{friendshipId}/reject).
+        /// </summary>
+        public async Task RejectFriendRequestAsync(string friendshipId)
         {
-            await SendRequestAsync<EmptyResponse>($"/{extAPI}/friends/{userId}", "DELETE");
+            await SendRequestAsync<EmptyResponse>($"/{extAPI}/friends/{friendshipId}/reject", "POST");
+        }
+
+        /// <summary>
+        /// Alias de GetPendingRequestsAsync — compatibilité avec FriendsScreen.
+        /// </summary>
+        public async Task<List<PendingFriendRequest>> GetFriendRequestsAsync()
+            => await GetPendingRequestsAsync();
+
+        /// <summary>
+        /// Alias de RejectFriendRequestAsync — compatibilité avec FriendsScreen.
+        /// </summary>
+        public async Task DeclineFriendRequestAsync(string friendshipId)
+            => await RejectFriendRequestAsync(friendshipId);
+
+        /// <summary>
+        /// Supprime un ami (DELETE /api/v1/friends/{friendshipId}).
+        /// </summary>
+        public async Task RemoveFriendAsync(string friendshipId)
+        {
+            await SendRequestAsync<EmptyResponse>($"/{extAPI}/friends/{friendshipId}", "DELETE");
         }
 
         #endregion

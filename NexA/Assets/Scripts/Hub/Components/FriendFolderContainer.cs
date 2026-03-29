@@ -96,9 +96,26 @@ namespace NexA.Hub.Components
                 {
                     eventID = EventTriggerType.PointerClick
                 };
-                
                 entry.callback.AddListener((_) => OnLabelClicked());
                 trigger.triggers.Add(entry);
+            }
+
+            // Clic droit sur le header → menu contextuel dossier
+            if (headerButton)
+            {
+                EventTrigger headerTrigger = headerButton.gameObject.GetComponent<EventTrigger>()
+                                             ?? headerButton.gameObject.AddComponent<EventTrigger>();
+                EventTrigger.Entry rightClick = new EventTrigger.Entry
+                {
+                    eventID = EventTriggerType.PointerClick
+                };
+                rightClick.callback.AddListener((data) =>
+                {
+                    PointerEventData ped = (PointerEventData)data;
+                    if (ped.button == PointerEventData.InputButton.Right)
+                        FriendContextMenu.Instance?.ShowForFolder(this, ped.position);
+                });
+                headerTrigger.triggers.Add(rightClick);
             }
 
             UpdateUI();
@@ -346,6 +363,14 @@ namespace NexA.Hub.Components
         }
 
         private void UpdateUI() => RefreshDisplay();
+
+        // ── API publique renommage / suppression (appelée par FriendContextMenu) ──────
+
+        /// <summary>Déclenche le renommage depuis l'extérieur (ex: menu contextuel).</summary>
+        public void BeginRenamePublic() => BeginRename();
+
+        /// <summary>Déclenche la suppression depuis l'extérieur (ex: menu contextuel).</summary>
+        public void TryDeletePublic() => TryDelete();
 
         // ── Renommage ─────────────────────────────────────────────────
 

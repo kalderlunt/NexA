@@ -279,11 +279,11 @@ namespace NexA.Hub.Screens
 
                 // Séparer incoming et outgoing (à ajuster selon l'API réelle)
                 // Pour l'instant on affiche tout comme incoming
-                DisplayFriendRequests(requests, new List<FriendRequest>());
+                DisplayFriendRequests(requests, new List<PendingFriendRequest>());
             });
         }
 
-        private void DisplayFriendRequests(List<FriendRequest> incoming, List<FriendRequest> outgoing)
+        private void DisplayFriendRequests(List<PendingFriendRequest> incoming, List<PendingFriendRequest> outgoing)
         {
             // Clear existing
             foreach (Transform child in incomingRequestsContainer)
@@ -489,12 +489,12 @@ namespace NexA.Hub.Screens
 
         private string _requestId;
 
-        public void Setup(FriendRequest request, bool isIncoming, Action<string> onAccept, Action<string> onDecline)
+        public void Setup(PendingFriendRequest request, bool isIncoming, Action<string> onAccept, Action<string> onDecline)
         {
             _requestId = request.id;
 
-            User displayUser = isIncoming ? request.from : request.to;
-            usernameText.text = displayUser.username;
+            string displayName = isIncoming ? request.user?.username : request.friend?.username;
+            usernameText.text = displayName ?? "Inconnu";
 
             if (isIncoming)
             {

@@ -69,6 +69,42 @@ namespace NexA.Hub.Models
         public List<FolderFriendEntry> friendsList;
     }
 
+    // ── Demandes d'amis en attente ─────────────────────────────────
+
+    /// <summary>
+    /// Demande d'ami reçue — correspond au FriendDetailResponse du backend.
+    /// Retourné par GET /api/v1/friends/pending
+    /// </summary>
+    [Serializable]
+    public class PendingFriendRequest
+    {
+        /// <summary>ID de l'amitié (friendshipId) — utilisé pour accepter/refuser.</summary>
+        public string id;
+        /// <summary>Utilisateur qui a envoyé la demande.</summary>
+        public FriendUserInfo user;
+        /// <summary>Utilisateur qui reçoit la demande (= soi-même).</summary>
+        public FriendUserInfo friend;
+        public string status;
+        public string createdAt;
+        public string acceptedAt;
+    }
+
+    /// <summary>
+    /// Info utilisateur imbriquée dans PendingFriendRequest.
+    /// Correspond à UserInfo du DTO Java.
+    /// </summary>
+    [Serializable]
+    public class FriendUserInfo
+    {
+        public string id;
+        public string username;
+        public string email;
+        public string avatarUrl;
+        public int    level;
+        public int    elo;
+        public string status;
+    }
+
     // ── Legacy models (garde la compatibilité) ─────────────────────
 
     [Serializable]
@@ -80,10 +116,12 @@ namespace NexA.Hub.Models
     [Serializable]
     public class FriendRequest
     {
-        public string id;
-        public User from;
-        public User to;
+        public string id;           // l'UUID de la relation (friendshipId)
+        public FriendUserInfo user;       // celui qui a envoyé la demande
+        public FriendUserInfo friend;     // celui qui la reçoit
+        public string status;       // "PENDING"
         public string createdAt;
+        public string acceptedAt;
     }
 
     [Serializable]

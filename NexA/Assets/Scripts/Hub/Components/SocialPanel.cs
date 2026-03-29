@@ -41,13 +41,34 @@ namespace NexA.Hub.Components
         [SerializeField] private Button addGroupButton;    // ⋮    Ajouter un dossier
         [SerializeField] private Button optionsButton;     // ☰    Options (tri, groupement)
         [SerializeField] private Button searchButton;      // 🔍   Rechercher
+        [SerializeField] private Button notificationsButton; // 🔔  Demandes d'ami reçues
+
+        // Badge sur le bouton notifications (nombre de demandes en attente)
+        [Header("Notifications badge")]
+        [SerializeField] private GameObject  pendingBadge;       // GO contenant le cercle rouge
+        [SerializeField] private TextMeshProUGUI pendingBadgeText; // chiffre dans le badge
+
+        // Overlays
+        [Header("Overlays")]
+        [SerializeField] private AddFriendOverlay      addFriendOverlay;       // ancien (gardé)
+        [SerializeField] private AddFriendOverlayV2    addFriendOverlayV2;     // nouveau (créé par code)
+        [SerializeField] private Sprite loadingSpinnerSprite;    // optionnel : sprite pour l'indicateur de chargement dans les overlays
+        [SerializeField] private SearchOverlayV2       searchOverlayV2;        // recherche amis (créé par code)
+        [SerializeField] private FriendRequestsOverlay friendRequestsOverlay;
 
         // Menu Options (activé/désactivé en overlay)
         [Header("Menu Options (dropdown)")]
-        [SerializeField] private GameObject optionsDropdown;
+        [SerializeField] private OptionsOverlayV2 optionsOverlayV2;    // nouveau (créé par code)
+        [SerializeField] private GameObject optionsDropdown;            // ancien (gardé)
         [SerializeField] private Button sortAlphaButton;       // Trier A→Z
         [SerializeField] private Button sortStatusButton;      // Trier par état (défaut)
         [SerializeField] private Button groupOfflineButton;    // Grouper hors ligne
+
+        // Labels des boutons du dropdown (pour afficher le ✓ actif)
+        [Header("Labels dropdown (optionnel — enfant Text TMP de chaque bouton)")]
+        [SerializeField] private TextMeshProUGUI sortAlphaLabel;
+        [SerializeField] private TextMeshProUGUI sortStatusLabel;
+        [SerializeField] private TextMeshProUGUI groupOfflineLabel;
 
         // ── Corps (liste) ──────────────────────────────────────────────
         [Header("Corps — liste des amis")]
@@ -105,8 +126,18 @@ namespace NexA.Hub.Components
         {
             addFriendButton?.onClick.AddListener(OnAddFriendClicked);
             addGroupButton?.onClick.AddListener(OnAddFolderClicked);
-            optionsButton?.onClick.AddListener(ToggleOptionsDropdown);
             searchButton?.onClick.AddListener(OnSearchClicked);
+            notificationsButton?.onClick.AddListener(OnNotificationsClicked);
+
+            // Cacher le badge au démarrage
+            if (pendingBadge) 
+                pendingBadge.SetActive(false);
+
+            // Créer les overlays et boutons par code s'ils ne sont pas assignés dans la scène
+            EnsureOverlay();
+
+            // Brancher optionsButton APRÈS EnsureOverlay (il peut être créé dedans)
+            optionsButton?.onClick.AddListener(ToggleOptionsDropdown);
 
             sortAlphaButton?.onClick.AddListener(OnSortAlphaClicked);
             sortStatusButton?.onClick.AddListener(OnSortStatusClicked);
@@ -125,7 +156,8 @@ namespace NexA.Hub.Components
 
             if (optionsDropdown)
                 optionsDropdown.SetActive(false);
-            
+
+            UpdateSortLabels();
             CreateDefaultFolders();
             // Show() est appelé par HomeScreen.ShowAsync — pas besoin de le rappeler ici
         }
@@ -140,6 +172,207 @@ namespace NexA.Hub.Components
             Assert.IsNotNull(offlineFolder, "[SocialPanel] 'offlineFolder' est null après assignment.");
             offlineFolder.Init("OFFLINE", asDefault: true);
             offlineFolder.Hide();
+        }
+
+        /// <summary>
+        /// Crée le FriendRequestsOverlay et le bouton notifications par code
+        /// si non assignés dans l'Inspector.
+        /// </summary>
+        private void EnsureOverlay()
+        {
+            // ── OptionsOverlayV2 ───────────────────────────────────────
+            if (!optionsOverlayV2)
+            {
+                GameObject optGO = new GameObject("OptionsOverlayV2");
+                optGO.transform.SetParent(transform, false);
+                optGO.layer = gameObject.layer;
+                RectTransform optRT = optGO.AddComponent<RectTransform>();
+                optRT.anchorMin        = new Vector2(1, 1);
+                optRT.anchorMax        = new Vector2(1, 1);
+                optRT.pivot            = new Vector2(1, 1);
+                optRT.anchoredPosition = new Vector2(0, -40);
+                optRT.sizeDelta        = new Vector2(160, 0);
+                optGO.AddComponent<CanvasGroup>();
+                optionsOverlayV2 = optGO.AddComponent<OptionsOverlayV2>();
+                optionsOverlayV2.BuildUI(
+                    onSortAlpha:    OnSortAlphaClicked,
+                    onSortStatus:   OnSortStatusClicked,
+                    onGroupOffline: OnGroupOfflineClicked
+                );
+            }
+
+            // ── optionsButton (☰) ──────────────────────────────────────
+            if (!optionsButton)
+            {
+                Transform topBar = transform.childCount > 0 ? transform.GetChild(0) : transform;
+
+                GameObject btnGO = new GameObject("OptionsButton");
+                btnGO.transform.SetParent(topBar, false);
+                btnGO.layer = gameObject.layer;
+
+                Image btnImg = btnGO.AddComponent<Image>();
+                btnImg.color = new Color(0.55f, 0.55f, 0.65f, 1f);
+
+                optionsButton = btnGO.AddComponent<Button>();
+                optionsButton.targetGraphic = btnImg;
+                optionsButton.onClick.AddListener(ToggleOptionsDropdown);
+
+                LayoutElement le = btnGO.AddComponent<LayoutElement>();
+                le.minWidth = 24; le.preferredWidth = 24;
+                le.minHeight = 24; le.preferredHeight = 24;
+
+                GameObject lblGO = new GameObject("Label");
+                lblGO.transform.SetParent(btnGO.transform, false);
+                RectTransform lblRT = lblGO.AddComponent<RectTransform>();
+                lblRT.anchorMin = Vector2.zero; lblRT.anchorMax = Vector2.one;
+                lblRT.sizeDelta = Vector2.zero;
+                TextMeshProUGUI lbl = lblGO.AddComponent<TextMeshProUGUI>();
+                lbl.text      = "=";
+                lbl.fontSize  = 11f;
+                lbl.fontStyle = FontStyles.Bold;
+                lbl.color     = Color.white;
+                lbl.alignment = TextAlignmentOptions.Center;
+
+                Debug.Log("[SocialPanel] OptionsButton créé par code.");
+            }
+
+            // ── SearchOverlayV2 ────────────────────────────────────────
+            if (!searchOverlayV2)
+            {
+                GameObject searchGO = new GameObject("SearchOverlayV2");
+                searchGO.transform.SetParent(transform, false);
+                searchGO.layer = gameObject.layer;
+
+                RectTransform searchRT = searchGO.AddComponent<RectTransform>();
+                searchRT.anchorMin = Vector2.zero;
+                searchRT.anchorMax = Vector2.one;
+                searchRT.offsetMin = Vector2.zero;
+                searchRT.offsetMax = Vector2.zero;
+
+                UnityEngine.UI.Image searchBg = searchGO.AddComponent<UnityEngine.UI.Image>();
+                searchBg.color = new Color(0.063f, 0.063f, 0.122f, 0.97f);
+                searchBg.raycastTarget = true;
+
+                searchGO.AddComponent<CanvasGroup>();
+                searchOverlayV2 = searchGO.AddComponent<SearchOverlayV2>();
+                searchOverlayV2.BuildUI();
+            }
+
+            // ── AddFriendOverlayV2 ─────────────────────────────────────
+            if (!addFriendOverlayV2)            {
+                GameObject addOverlayGO = new GameObject("AddFriendOverlayV2");
+                addOverlayGO.transform.SetParent(transform, false);
+                addOverlayGO.layer = gameObject.layer;
+
+                RectTransform addRT = addOverlayGO.AddComponent<RectTransform>();
+                addRT.anchorMin = Vector2.zero;
+                addRT.anchorMax = Vector2.one;
+                addRT.offsetMin = Vector2.zero;
+                addRT.offsetMax = Vector2.zero;
+
+                UnityEngine.UI.Image addBg = addOverlayGO.AddComponent<UnityEngine.UI.Image>();
+                addBg.color = new Color(0.063f, 0.063f, 0.122f, 0.97f);
+                addBg.raycastTarget = true;
+
+                addOverlayGO.AddComponent<CanvasGroup>();
+                addFriendOverlayV2 = addOverlayGO.AddComponent<AddFriendOverlayV2>();
+                if (loadingSpinnerSprite)
+                    addFriendOverlayV2.SetSpinnerSprite(loadingSpinnerSprite);
+                addFriendOverlayV2.BuildUI();
+            }
+
+            // ── FriendRequestsOverlay ──────────────────────────────────
+            if (!friendRequestsOverlay)
+            {
+                GameObject overlayGO = new GameObject("FriendRequestsOverlay");
+                overlayGO.transform.SetParent(transform, false);
+                overlayGO.layer = gameObject.layer;
+
+                // Couvre tout le SocialPanel
+                RectTransform rt = overlayGO.AddComponent<RectTransform>();
+                rt.anchorMin        = Vector2.zero;
+                rt.anchorMax        = Vector2.one;
+                rt.offsetMin        = Vector2.zero;
+                rt.offsetMax        = Vector2.zero;
+
+                // Fond semi-opaque
+                UnityEngine.UI.Image bg = overlayGO.AddComponent<UnityEngine.UI.Image>();
+                bg.color = new Color(0.063f, 0.063f, 0.122f, 0.97f);
+                bg.raycastTarget = true;
+
+                overlayGO.AddComponent<CanvasGroup>();
+                friendRequestsOverlay = overlayGO.AddComponent<FriendRequestsOverlay>();
+                friendRequestsOverlay.BuildUI(); // construit TopRow + ScrollView + textes
+            }
+
+            // ── Bouton notifications ───────────────────────────────────
+            if (!notificationsButton)
+            {
+                // Cherche le PanelTopBar (premier enfant)
+                Transform topBar = transform.childCount > 0 ? transform.GetChild(0) : transform;
+
+                GameObject btnGO = new GameObject("NotificationsButton");
+                btnGO.transform.SetParent(topBar, false);
+                btnGO.layer = gameObject.layer;
+
+                RectTransform btnRT = btnGO.AddComponent<RectTransform>();
+                btnRT.sizeDelta = new Vector2(24, 24);
+
+                UnityEngine.UI.Image btnImg = btnGO.AddComponent<UnityEngine.UI.Image>();
+                btnImg.color = new Color(0.69f, 0.69f, 0.69f, 1f);
+
+                notificationsButton = btnGO.AddComponent<UnityEngine.UI.Button>();
+                notificationsButton.targetGraphic = btnImg;
+                notificationsButton.onClick.AddListener(OnNotificationsClicked);
+
+                UnityEngine.UI.LayoutElement le = btnGO.AddComponent<UnityEngine.UI.LayoutElement>();
+                le.minWidth = 24; le.minHeight = 24;
+                le.preferredWidth = 24; le.preferredHeight = 24;
+
+                // Label "🔔" en TMP
+                GameObject lblGO = new GameObject("Label");
+                lblGO.transform.SetParent(btnGO.transform, false);
+                RectTransform lblRT = lblGO.AddComponent<RectTransform>();
+                lblRT.anchorMin = Vector2.zero; lblRT.anchorMax = Vector2.one;
+                lblRT.sizeDelta = Vector2.zero;
+                TMPro.TextMeshProUGUI lbl = lblGO.AddComponent<TMPro.TextMeshProUGUI>();
+                lbl.text = "D"; // "D" pour Demandes — remplacer par icône si disponible
+                lbl.fontSize = 9f;
+                lbl.color = Color.white;
+                lbl.alignment = TMPro.TextAlignmentOptions.Center;
+
+                // Badge rouge
+                GameObject badgeGO = new GameObject("PendingBadge");
+                badgeGO.transform.SetParent(btnGO.transform, false);
+                RectTransform badgeRT = badgeGO.AddComponent<RectTransform>();
+                badgeRT.anchorMin = new Vector2(1, 1);
+                badgeRT.anchorMax = new Vector2(1, 1);
+                badgeRT.pivot     = new Vector2(1, 1);
+                badgeRT.anchoredPosition = new Vector2(-1, -1);
+                badgeRT.sizeDelta = new Vector2(13, 13);
+
+                UnityEngine.UI.Image badgeImg = badgeGO.AddComponent<UnityEngine.UI.Image>();
+                badgeImg.color = new Color(0.92f, 0.24f, 0.24f, 1f);
+
+                pendingBadge = badgeGO;
+                pendingBadge.SetActive(false);
+
+                GameObject badgeTxtGO = new GameObject("BadgeText");
+                badgeTxtGO.transform.SetParent(badgeGO.transform, false);
+                RectTransform badgeTxtRT = badgeTxtGO.AddComponent<RectTransform>();
+                badgeTxtRT.anchorMin = Vector2.zero; badgeTxtRT.anchorMax = Vector2.one;
+                badgeTxtRT.sizeDelta = Vector2.zero;
+                pendingBadgeText = badgeTxtGO.AddComponent<TMPro.TextMeshProUGUI>();
+                pendingBadgeText.text = "0";
+                pendingBadgeText.fontSize = 7f;
+                pendingBadgeText.fontStyle = TMPro.FontStyles.Bold;
+                pendingBadgeText.color = Color.white;
+                pendingBadgeText.alignment = TMPro.TextAlignmentOptions.Center;
+
+                Debug.Log("[SocialPanel] NotificationsButton créé par code.");
+            }
+
+            Debug.Log("[SocialPanel] EnsureOverlay OK.");
         }
 
         // ── Public API ─────────────────────────────────────────────────
@@ -195,6 +428,34 @@ namespace NexA.Hub.Components
             {
                 Debug.LogError($"[SocialPanel] Erreur : {ex.Message}");
             }
+
+            // Mettre à jour le badge des demandes en attente (en parallèle — ne bloque pas)
+            _ = RefreshPendingBadgeAsync();
+        }
+
+        /// <summary>Interroge le backend et met à jour le badge de demandes en attente.</summary>
+        public async Task RefreshPendingBadgeAsync()
+        {
+            try
+            {
+                List<PendingFriendRequest> pending = await APIService.Instance.GetPendingRequestsAsync();
+                int count = pending?.Count ?? 0;
+                RefreshPendingBadge(count);
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[SocialPanel] Impossible de récupérer les demandes en attente : {ex.Message}");
+            }
+        }
+
+        /// <summary>Met à jour l'affichage du badge (appelé par FriendRequestsOverlay après accept/reject).</summary>
+        public void RefreshPendingBadge(int count)
+        {
+            if (pendingBadge)
+                pendingBadge.SetActive(count > 0);
+
+            if (pendingBadgeText)
+                pendingBadgeText.text = count > 9 ? "9+" : count.ToString();
         }
 
         // ── Construction de la liste ───────────────────────────────────
@@ -295,7 +556,7 @@ namespace NexA.Hub.Components
                             folderContainer?.Init(folder.name, asDefault: false, folderId: folder.id);
                             target = folderContainer?.friendContainer ?? friendsContainer;
                         }
-                        
+
                         // Header du dossier custom
                         cursor = folderContainer.AnimateHeaderIn(cursor);
                         cursor += 0.04f;
@@ -440,9 +701,26 @@ namespace NexA.Hub.Components
         private void ToggleOptionsDropdown()
         {
             Deselect();
+
+            if (optionsOverlayV2 != null)
+            {
+                if (optionsOverlayV2.IsOpen)
+                    optionsOverlayV2.Hide();
+                else
+                    optionsOverlayV2.Show(sortByAlpha, groupOffline);
+                return;
+            }
+
+            // Fallback ancien dropdown
             optionsOpen = !optionsOpen;
             if (optionsDropdown)
+            {
+                if (optionsDropdown.transform.parent != transform)
+                    optionsDropdown.transform.SetParent(transform, worldPositionStays: true);
                 optionsDropdown.SetActive(optionsOpen);
+                if (optionsOpen)
+                    optionsDropdown.transform.SetAsLastSibling();
+            }
         }
 
         private void OnSortAlphaClicked()
@@ -450,6 +728,7 @@ namespace NexA.Hub.Components
             Deselect();
             sortByAlpha = true;
             CloseDropdown();
+            UpdateSortLabels();
             RebuildList();
             ToastManager.Show("Tri : alphabétique", ToastType.Info);
         }
@@ -459,6 +738,7 @@ namespace NexA.Hub.Components
             Deselect();
             sortByAlpha = false;
             CloseDropdown();
+            UpdateSortLabels();
             RebuildList();
             ToastManager.Show("Tri : par état", ToastType.Info);
         }
@@ -467,7 +747,8 @@ namespace NexA.Hub.Components
         {
             Deselect();
             groupOffline = !groupOffline;
-            CloseDropdown();
+            optionsOverlayV2?.UpdateState(sortByAlpha, groupOffline);
+            UpdateSortLabels();
             RebuildList();
             ToastManager.Show(groupOffline ? "Amis hors ligne groupés" : "Amis hors ligne affichés", ToastType.Info);
         }
@@ -475,8 +756,19 @@ namespace NexA.Hub.Components
         private void CloseDropdown()
         {
             optionsOpen = false;
-            if (optionsDropdown) 
-                optionsDropdown.SetActive(false);
+            optionsOverlayV2?.Hide();
+            if (optionsDropdown) optionsDropdown.SetActive(false);
+        }
+
+        /// <summary>Met à jour les labels du dropdown pour refléter le tri actif (✓ = actif).</summary>
+        private void UpdateSortLabels()
+        {
+            if (sortAlphaLabel)
+                sortAlphaLabel.text   = sortByAlpha  ? "✓ Trier A → Z"      : "Trier A → Z";
+            if (sortStatusLabel)
+                sortStatusLabel.text  = !sortByAlpha ? "✓ Trier par état"    : "Trier par état";
+            if (groupOfflineLabel)
+                groupOfflineLabel.text = groupOffline ? "✓ Grouper hors ligne" : "Grouper hors ligne";
         }
 
         // ── Boutons ────────────────────────────────────────────────────
@@ -484,7 +776,21 @@ namespace NexA.Hub.Components
         private void OnAddFriendClicked()
         {
             Deselect();
-            UIManager.Instance.ShowScreen(ScreenType.Friends);
+            if (addFriendOverlayV2 != null)
+                addFriendOverlayV2.Show();
+            else if (addFriendOverlay != null)
+                addFriendOverlay.Show();
+            else
+                UIManager.Instance.ShowScreen(ScreenType.Friends);
+        }
+
+        private void OnNotificationsClicked()
+        {
+            Deselect();
+            if (friendRequestsOverlay != null)
+                friendRequestsOverlay.Show();
+            else
+                ToastManager.Show("Overlay non configuré", ToastType.Warning);
         }
 
         private async void OnAddFolderClicked()
@@ -518,7 +824,37 @@ namespace NexA.Hub.Components
             folder?.AnimateHeaderIn();
         }
 
-        private void OnSearchClicked()          { Deselect(); UIManager.Instance.ShowScreen(ScreenType.Friends); }
+        private void OnSearchClicked()
+        {
+            Deselect();
+            if (searchOverlayV2 != null)
+            {
+                // Passe la liste en cache si dispo, sinon SearchOverlayV2 charge lui-même
+                List<Friend> cached = GetCachedFriends();
+                searchOverlayV2.Show(
+                    friends: cached,
+                    onInviteClicked: () => addFriendOverlayV2?.Show()
+                );
+            }
+            else
+            {
+                UIManager.Instance.ShowScreen(ScreenType.Friends);
+            }
+        }
+
+        /// <summary>Extrait la liste plate des amis depuis les dossiers en cache.</summary>
+        private List<Friend> GetCachedFriends()
+        {
+            if (cachedFolders == null || cachedFolders.Count == 0) return null;
+            HashSet<string> seen = new();
+            List<Friend> result  = new();
+            foreach (FolderDetail folder in cachedFolders)
+                if (folder?.friendsList != null)
+                    foreach (FolderFriendEntry entry in folder.friendsList)
+                        if (entry?.friend != null && seen.Add(entry.friend.id))
+                            result.Add(entry.friend);
+            return result.Count > 0 ? result : null;
+        }
         private void OnMessagingClicked()       { Deselect(); ToastManager.Show("Messagerie — bientôt disponible", ToastType.Info); }
         private void OnDisabledFeatureClicked() { Deselect(); ToastManager.Show("Fonctionnalité en cours de développement", ToastType.Warning); }
         private void OnBugReportClicked()       { Deselect(); ToastManager.Show("Signalement de bug — en développement", ToastType.Warning); }
@@ -557,6 +893,7 @@ namespace NexA.Hub.Components
             addGroupButton?.onClick.RemoveAllListeners();
             searchButton?.onClick.RemoveAllListeners();
             optionsButton?.onClick.RemoveAllListeners();
+            notificationsButton?.onClick.RemoveAllListeners();
             sortAlphaButton?.onClick.RemoveAllListeners();
             sortStatusButton?.onClick.RemoveAllListeners();
             groupOfflineButton?.onClick.RemoveAllListeners();
