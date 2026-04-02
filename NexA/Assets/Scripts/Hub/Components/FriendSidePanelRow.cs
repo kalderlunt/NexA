@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using NexA.Hub.Models;
+using Utils;
 
 namespace NexA.Hub.Components
 {
@@ -82,16 +83,64 @@ namespace NexA.Hub.Components
             }
         }
 
+        /// <summary>
+        /// Met à jour le statut en temps réel (appelé par SocialPanel via STOMP).
+        /// Anime le changement de texte avec un effet typewriter.
+        /// </summary>
+        public void UpdateStatus(string backendStatus)
+        {
+            // Normaliser comme le fait Friend.StatusNormalized
+            string normalized = backendStatus?.ToUpper() switch
+            {
+                "ONLINE"  => "online",
+                "IN_GAME" => "in-game",
+                "OFFLINE" => "offline",
+                _         => "offline"
+            };
+
+            IsOnline = normalized == "online" || normalized == "in-game";
+
+            switch (normalized)
+            {
+                case "online":
+                    SetStatusAnimated(OnlineColor, "En ligne");
+                    break;
+                case "in-game":
+                    SetStatusAnimated(InGameColor, "En jeu");
+                    break;
+                default:
+                    SetStatusAnimated(OfflineColor, "Hors ligne");
+                    break;
+            }
+        }
+
         private void SetStatus(Color color, string label)
         {
-            if (statusDot)  
+            if (statusDot)
                 statusDot.color  = color;
 
             if (!activityText)
                 return;
-            
+
             activityText.text  = label;
             activityText.color = color;
+        }
+
+        /// <summary>Même chose que SetStatus mais avec animation typewriter sur le texte et transition de couleur sur le dot.</summary>
+        private void SetStatusAnimated(Color color, string label)
+        {
+            // Animer la couleur du dot
+            if (statusDot)
+                statusDot.DOColor(color, animationDuration).SetEase(Ease.OutCubic);
+
+            if (!activityText)
+                return;
+
+            // Animer la couleur du texte
+            activityText.DOColor(color, animationDuration).SetEase(Ease.OutCubic);
+
+            // Animer le changement de texte avec l'effet typewriter
+            AnimationHelper.AnimateTextChange(activityText, label, animationDuration * 2f);
         }
 
         /// <summary>

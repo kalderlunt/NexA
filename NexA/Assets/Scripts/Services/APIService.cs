@@ -40,6 +40,12 @@ namespace NexA.Hub.Services
         /// </summary>
         public static bool CHECK_TO_BACKEND => Instance != null ? Instance.checkToBackend : true;
 
+        /// <summary>URL de base du backend (ex: "http://192.168.2.184").</summary>
+        public string BaseURL => baseURL;
+
+        /// <summary>Port du backend (ex: "8080").</summary>
+        public string Port => port;
+
         private void Awake()
         {
             if (Instance != null && Instance != this)

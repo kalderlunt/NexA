@@ -126,6 +126,11 @@ namespace NexA.Hub.Services
                 CurrentUser = response.user;
 
                 Debug.Log($"[AuthManager] ✅ Inscription réussie pour {CurrentUser.username} (ID: {CurrentUser.id})");
+
+                // Connecter le WebSocket STOMP pour les statuts d'amis en temps réel
+                if (FriendsManager.Instance != null)
+                    _ = FriendsManager.Instance.ConnectAsync(_accessToken, CurrentUser.id);
+
                 return true;
             }
             catch (APIException ex)
@@ -161,6 +166,11 @@ namespace NexA.Hub.Services
                 CurrentUser = response.user;
 
                 Debug.Log($"[AuthManager] Connexion réussie pour {CurrentUser.username} (ID: {CurrentUser.id})");
+
+                // Connecter le WebSocket STOMP pour les statuts d'amis en temps réel
+                if (FriendsManager.Instance != null)
+                    _ = FriendsManager.Instance.ConnectAsync(_accessToken, CurrentUser.id);
+
                 return CurrentUser;
             }
             catch (APIException ex)
@@ -186,6 +196,10 @@ namespace NexA.Hub.Services
             }
             finally
             {
+                // Fermer le WebSocket STOMP avant de supprimer les tokens
+                if (FriendsManager.Instance)
+                    await FriendsManager.Instance.DisconnectAsync();
+
                 ClearTokens();
                 CurrentUser = null;
                 Debug.Log("[AuthManager] Déconnexion locale réussie");
@@ -261,6 +275,11 @@ namespace NexA.Hub.Services
                 CurrentUser = await APIService.Instance.GetCurrentUserAsync();
                 
                 Debug.Log($"[AuthManager] Session restaurée pour {CurrentUser.username}");
+
+                // Connecter le WebSocket STOMP pour les statuts d'amis en temps réel
+                if (FriendsManager.Instance != null)
+                    _ = FriendsManager.Instance.ConnectAsync(_accessToken, CurrentUser.id);
+
                 return true;
             }
             catch (Exception ex)

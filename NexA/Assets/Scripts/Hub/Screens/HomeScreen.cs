@@ -23,9 +23,11 @@ namespace NexA.Hub.Screens
         [SerializeField] private RectTransform contentPanel;
 
         [Header("Stats rapides")]
-        [SerializeField] private TextMeshProUGUI totalMatchesText;
-        [SerializeField] private TextMeshProUGUI winRateText;
+        [SerializeField] private TextMeshProUGUI usernameText;
+        [SerializeField] private TextMeshProUGUI levelText;
         [SerializeField] private TextMeshProUGUI eloText;
+        [SerializeField] private TextMeshProUGUI winRateText;
+        [SerializeField] private TextMeshProUGUI totalMatchesText;
 
         [Header("Bannière / Message de bienvenue")]
         [SerializeField] private TextMeshProUGUI welcomeText;
@@ -57,7 +59,7 @@ namespace NexA.Hub.Screens
             Sequence seq = DOTween.Sequence();
             seq.Append(mainCanvasGroup.DOFade(1f, AnimationHelper.NORMAL));
 
-            if (contentPanel != null)
+            if (contentPanel)
             {
                 contentPanel.localScale = new Vector3(0.95f, 0.95f, 1f);
                 seq.Join(contentPanel.DOScale(1f, AnimationHelper.MEDIUM).SetEase(Ease.OutBack));
@@ -76,21 +78,30 @@ namespace NexA.Hub.Screens
         private void LoadUserData()
         {
             User user = AuthManager.Instance?.CurrentUser;
-            if (user == null) return;
+            if (user == null)
+                return;
 
-            if (welcomeText != null)
+            if (welcomeText)
                 welcomeText.text = $"Bienvenue, {user.username} !";
 
-            if (eloText != null)
+            if (usernameText)
+                usernameText.text = user.username;
+            
+            if (levelText)
+                levelText.text = $"Level. {user.level}";
+            
+            if (eloText)
                 eloText.text = $"Elo : {user.elo}";
-
-            if (user.stats != null)
-            {
-                if (totalMatchesText != null)
-                    totalMatchesText.text = $"{user.stats.totalMatches} parties";
-                if (winRateText != null)
-                    winRateText.text = $"{user.stats.winRate:F1}% victoires";
-            }
+            
+            
+            if (user.stats == null)
+                return;
+            
+            if (totalMatchesText)
+                totalMatchesText.text = $"{user.stats.totalMatches} parties";
+                
+            if (winRateText)
+                winRateText.text = $"{user.stats.winRate:F1}% victoires";
         }
 
         private async void OnLogoutClicked()

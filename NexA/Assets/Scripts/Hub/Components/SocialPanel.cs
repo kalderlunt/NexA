@@ -130,8 +130,12 @@ namespace NexA.Hub.Components
             notificationsButton?.onClick.AddListener(OnNotificationsClicked);
 
             // Cacher le badge au démarrage
-            if (pendingBadge) 
+            if (pendingBadge)
                 pendingBadge.SetActive(false);
+
+            // Écouter les changements de statut en temps réel
+            if (FriendsManager.Instance != null)
+                FriendsManager.Instance.OnFriendStatusChanged += OnFriendStatusChanged;
 
             // Créer les overlays et boutons par code s'ils ne sont pas assignés dans la scène
             EnsureOverlay();
@@ -842,6 +846,90 @@ namespace NexA.Hub.Components
             }
         }
 
+        // ── Temps réel (WebSocket/STOMP) ──────────────────────────────
+
+        /// <summary>
+        /// Appelé par FriendsManager quand un ami change de statut via STOMP.
+        /// Met à jour uniquement la row concernée + le cache local.
+        /// </summary>
+        private void OnFriendStatusChanged(FriendStatusUpdate update)
+        {
+            if (string.IsNullOrEmpty(update?.userId))
+                return;
+
+            // 1. Mettre à jour le cache local
+            if (cachedFolders != null)
+            {
+                foreach (FolderDetail folder in cachedFolders)
+                    if (folder?.friendsList != null)
+                        foreach (FolderFriendEntry entry in folder.friendsList)
+                            if (entry?.friend != null && entry.friend.id == update.userId)
+                                entry.friend.status = update.status;
+            }
+
+            // 2. Trouver la row correspondante et mettre à jour son statut
+            FriendSidePanelRow targetRow = FindRowByFriendId(update.userId);
+            if (targetRow != null)
+            {
+                bool wasOnline = targetRow.IsOnline;
+                targetRow.UpdateStatus(update.status);
+                bool isNowOnline = targetRow.IsOnline;
+
+                Debug.Log($"[SocialPanel] Statut mis à jour : {update.username} → {update.status}");
+
+                // Si le statut online/offline a changé et que le groupement hors ligne est actif,
+                // il faut reconstruire la liste pour déplacer la row dans le bon dossier
+                if (wasOnline != isNowOnline && groupOffline)
+                {
+                    RebuildList();
+                    return;
+                }
+
+                // Rafraîchir les compteurs des dossiers
+                RefreshGroupHeaders();
+
+                // Mettre à jour le badge en ligne dans la top bar
+                int totalOnline = CountOnlineFriends();
+                HubTopBar.Instance?.SetFriendsOnlineBadge(totalOnline);
+            }
+        }
+
+        /// <summary>Cherche une FriendSidePanelRow par l'ID de l'ami dans tous les containers.</summary>
+        private FriendSidePanelRow FindRowByFriendId(string friendId)
+        {
+            foreach (FriendFolderContainer folder in activeFolders)
+            {
+                if (folder == null || folder.friendContainer == null) continue;
+
+                foreach (Transform child in folder.friendContainer)
+                {
+                    FriendSidePanelRow row = child.GetComponent<FriendSidePanelRow>();
+                    if (row != null && row.FriendId == friendId)
+                        return row;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>Compte le nombre total d'amis en ligne dans tous les dossiers.</summary>
+        private int CountOnlineFriends()
+        {
+            int count = 0;
+            foreach (FriendFolderContainer folder in activeFolders)
+            {
+                if (folder == null || folder.friendContainer == null) continue;
+
+                foreach (Transform child in folder.friendContainer)
+                {
+                    FriendSidePanelRow row = child.GetComponent<FriendSidePanelRow>();
+                    if (row != null && row.IsOnline)
+                        count++;
+                }
+            }
+            return count;
+        }
+
         /// <summary>Extrait la liste plate des amis depuis les dossiers en cache.</summary>
         private List<Friend> GetCachedFriends()
         {
@@ -889,6 +977,10 @@ namespace NexA.Hub.Components
 
         private void OnDestroy()
         {
+            // Se désabonner des événements temps réel
+            if (FriendsManager.Instance != null)
+                FriendsManager.Instance.OnFriendStatusChanged -= OnFriendStatusChanged;
+
             addFriendButton?.onClick.RemoveAllListeners();
             addGroupButton?.onClick.RemoveAllListeners();
             searchButton?.onClick.RemoveAllListeners();
