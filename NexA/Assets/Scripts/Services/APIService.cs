@@ -20,7 +20,7 @@ namespace NexA.Hub.Services
         [Header("Configuration")]
 //#if UNITY_EDITOR
         [SerializeField] private string baseURL = "http://192.168.2.184";
-        [SerializeField] private string port = "8080";
+        [SerializeField] private string port = "8080"; // production ne pas metre  https://nexa-api.kalderlunt.fr/
 		[SerializeField] private string extAPI = "api/v1";
 		[SerializeField] private string extAPIAuth = "auth";
 /*#else

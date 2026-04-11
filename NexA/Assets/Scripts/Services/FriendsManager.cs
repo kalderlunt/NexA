@@ -154,9 +154,11 @@ namespace NexA.Hub.Services
             // Extraire le host sans le schéma http(s)://
             string host = baseUrl.Replace("https://", "").Replace("http://", "").TrimEnd('/');
             string scheme = baseUrl.StartsWith("https") ? "wss" : "ws";
-            string url = $"{scheme}://{host}:{port}{wsPath}";
+            string portPart = string.IsNullOrEmpty(port) ? "" : $":{port}";
+            string url = $"{scheme}://{host}{portPart}{wsPath}";
 
-            Debug.Log($"[FriendsManager] Connexion WebSocket vers {url}");
+            Debug.Log($"[FriendsManager] Connexion WebSocket vers : {url}");
+
 
             _ws = new WebSocket(url);
 
@@ -251,7 +253,8 @@ namespace NexA.Hub.Services
 
         private void OnWebSocketError(string error)
         {
-            Debug.LogError($"[FriendsManager] WebSocket erreur : {error}");
+            Debug.LogError($"[FriendsManager] WebSocket erreur : {error}\n" +
+                           $"URL tentée : {APIService.Instance.BaseURL} | wsPath={wsPath}");
         }
 
         private async void OnWebSocketClose(WebSocketCloseCode closeCode)

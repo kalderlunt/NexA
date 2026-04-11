@@ -265,28 +265,34 @@ namespace NexA.Hub.Components
         }
 
         // ── Drop ──────────────────────────────────────────────────────
+        // IDropHandler est conservé comme fallback mais le drop est géré principalement
+        // via NotifyDropReceived, appelé par FriendRowDragHandler.OnEndDrag (raycast manuel).
 
         public void OnDrop(PointerEventData eventData)
         {
+            // Fallback : au cas où IDropHandler serait quand même déclenché
+            FriendRowDragHandler dragged = FriendRowDragHandler.CurrentlyDragged;
+            if (!dragged || dragged.OriginalFolder == this) return;
+
             if (backgroundImage != null)
                 backgroundImage.color = normalColor;
 
-            FriendRowDragHandler dragged = FriendRowDragHandler.CurrentlyDragged;
-            if (!dragged) 
-                return;
-            if (dragged.transform.parent == friendContainer)
-                return;
-
-            // Décrémenter le container source
-            FriendFolderContainer source = dragged.transform.parent?.GetComponentInParent<FriendFolderContainer>();
-            source?.RemoveRow(dragged.gameObject);
-
-            // Ajouter dans ce container
+            dragged.OriginalFolder?.RemoveRow(dragged.gameObject);
             AddRow(dragged.gameObject);
             FriendRowDragHandler.CurrentlyDragged = null;
-
-            // Appel API — déplacer l'ami dans ce dossier
             MoveFriendToThisFolderAsync(dragged.gameObject);
+        }
+
+        /// <summary>
+        /// Appelé par FriendRowDragHandler.OnEndDrag après un drop détecté par raycast manuel.
+        /// À ce stade AddRow a déjà été appelé — on fait juste l'appel API.
+        /// </summary>
+        public void NotifyDropReceived(FriendRowDragHandler handler)
+        {
+            Debug.Log($"[FriendFolderContainer] Drop reçu sur '{groupName}' pour {handler.name}");
+            if (backgroundImage != null)
+                backgroundImage.DOColor(normalColor, 0.15f);
+            MoveFriendToThisFolderAsync(handler.gameObject);
         }
 
         /// <summary>Appelle l'API pour déplacer l'ami dans ce dossier.</summary>
