@@ -1,0 +1,78 @@
+﻿// NexA Database Schema - DBML for dbdiagram.io
+// Visitez: https://dbdiagram.io/ et collez ce contenu
+Project NexA {
+  database_type: 'PostgreSQL'
+  Note: 'Système de gestion pour client PC style League of Legends'
+}
+Table users {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  email varchar(255) [unique, not null]
+  username varchar(50) [unique, not null]
+  password_hash varchar(255) [not null, note: 'Bcrypt hash']
+  avatar_url varchar(500) [null]
+  level integer [default: 1]
+  elo integer [default: 1000]
+  created_at timestamp [default: `NOW()`, not null]
+  last_login timestamp [null]
+  is_active boolean [default: true, not null]
+  status varchar(20) [default: 'offline', not null]
+  Indexes {
+    email [name: 'idx_users_email']
+    username [name: 'idx_users_username']
+    status [name: 'idx_users_status']
+  }
+}
+Table friendships {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  requester_id uuid [not null, ref: > users.id]
+  receiver_id uuid [not null, ref: > users.id]
+  status varchar(20) [default: 'pending', not null]
+  created_at timestamp [default: `NOW()`, not null]
+  updated_at timestamp [default: `NOW()`, not null]
+  Indexes {
+    (requester_id, status) [name: 'idx_friendships_requester']
+    (receiver_id, status) [name: 'idx_friendships_receiver']
+  }
+}
+Table matches {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  match_type varchar(20) [not null]
+  status varchar(20) [default: 'pending', not null]
+  winner_team integer [null]
+  duration_seconds integer [null]
+  started_at timestamp [null]
+  ended_at timestamp [null]
+  created_at timestamp [default: `NOW()`, not null]
+  Indexes {
+    created_at [name: 'idx_matches_created_at']
+    status [name: 'idx_matches_status']
+  }
+}
+Table match_participants {
+  id uuid [pk, default: `uuid_generate_v4()`]
+  match_id uuid [not null, ref: > matches.id]
+  user_id uuid [not null, ref: > users.id]
+  team integer [not null]
+  champion_id integer [null]
+  kills integer [default: 0, not null]
+  deaths integer [default: 0, not null]
+  assists integer [default: 0, not null]
+  gold_earned integer [default: 0, not null]
+  damage_dealt integer [default: 0, not null]
+  Indexes {
+    match_id [name: 'idx_participants_match']
+    user_id [name: 'idx_participants_user']
+  }
+}
+Table user_stats {
+  user_id uuid [pk, ref: - users.id]
+  total_matches integer [default: 0, not null]
+  wins integer [default: 0, not null]
+  losses integer [default: 0, not null]
+  total_kills integer [default: 0, not null]
+  total_deaths integer [default: 0, not null]
+  total_assists integer [default: 0, not null]
+  win_rate decimal(5,2) [default: 0.0, not null]
+  kda_ratio decimal(5,2) [default: 0.0, not null]
+  updated_at timestamp [default: `NOW()`, not null]
+}
