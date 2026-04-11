@@ -1,0 +1,100 @@
+# =========================================
+# Unity .gitignore (clean & safe)
+# =========================================
+
+############################
+# Unity - Core folders
+############################
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+############################
+# Unity - Generated files
+############################
+sysinfo.txt
+*.stackdump
+
+############################
+# IDE / Editors
+############################
+.vs/
+.vscode/
+.idea/
+.consulo/
+
+############################
+# IDE generated files
+############################
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+############################
+# Unity generated meta (SAFE)
+############################
+*.pidb.meta
+*.pdb.meta
+*.mdb.meta
+
+############################
+# Builds / packages
+############################
+*.apk
+*.aab
+*.app
+*.unitypackage
+
+############################
+# Addressables (packed)
+############################
+[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+
+############################
+# Temporary StreamingAssets (Addressables)
+############################
+[Aa]ssets/[Ss]treamingAssets/aa.meta
+[Aa]ssets/[Ss]treamingAssets/aa/*
+
+############################
+# Custom build output (optional)
+############################
+[Bb]in/
+[Dd]ist/
+[Bb]uildOutput/
+
+############################
+# OS junk
+############################
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+############################
+# Git
+############################
+*.orig
+*.log
+
+############################
+# IMPORTANT: never ignore Unity meta
+############################
+!*.meta
