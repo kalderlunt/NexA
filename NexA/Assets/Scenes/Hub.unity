@@ -29196,8 +29196,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c13c4913ab3b4dfaa2b1f1f68299b203, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NexA.Hub.Services.APIService
-  baseURL: http://localhost
-  port: 8080
+  baseURL: https://nexa-api.kalderlunt.fr
+  port: 
   extAPI: api/v1
   extAPIAuth: auth
   timeoutSeconds: 10
