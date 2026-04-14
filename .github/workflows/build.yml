@@ -73,8 +73,8 @@ jobs:
       - name: Cache Unity Library
         uses: actions/cache@v4
         with:
-          path: Library
-          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          path: NexA/Library
+          key: Library-${{ matrix.targetPlatform }}-${{ hashFiles('NexA/Assets/**', 'NexA/Packages/**', 'NexA/ProjectSettings/**') }}
           restore-keys: |
             Library-${{ matrix.targetPlatform }}-
             Library-
@@ -87,11 +87,12 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         with:
+          projectPath:    NexA
           unityVersion:   ${{ env.UNITY_VERSION }}
           targetPlatform: ${{ matrix.targetPlatform }}
           buildsPath:     build
           buildName:      ${{ env.PROJECT_NAME }}
-          scenes: Assets/Scenes/Hub.unity
+          scenes:         Assets/Scenes/Hub.unity
 
       # Nom de l'asset : ProjectName_vX.X.X_Linux64.zip / _Windows64.zip
       - name: Zip build
