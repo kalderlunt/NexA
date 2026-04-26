@@ -11,22 +11,6 @@ namespace NexA.Hub.Models
     public class AuthResponse
     {
         public User user;
-        public TokenData tokens;
-    }
-
-    [Serializable]
-    public class RefreshResponse
-    {
-        public string accessToken;
-        public long expiresIn;
-    }
-
-    [Serializable]
-    public class TokenData
-    {
-        public string accessToken;
-        public string refreshToken;
-        public long expiresIn;
     }
 
     [Serializable]

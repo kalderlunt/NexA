@@ -328,6 +328,7 @@ namespace NexA.Hub.Components
                     foreach (User user in users)
                     {
                         SpawnResultItem(user, delay);
+                        //delay += 0.04f;
                         delay += 0.04f;
                     }
                 }
