@@ -29203,6 +29203,7 @@ MonoBehaviour:
   timeoutSeconds: 10
   maxRetries: 3
   retryDelaySeconds: 1
+  accessTokenLifetimeSeconds: 900
   checkToBackend: 1
 --- !u!1 &2098374162
 GameObject:
@@ -29691,6 +29692,9 @@ MonoBehaviour:
   versionText: {fileID: 3600000054}
   bugButton: {fileID: 3600000063}
   canvasGroup: {fileID: 2109508840}
+  fadeInDuration: 0.3
+  fadeOutDuration: 0.2
+  staggerDelay: 0.01
 --- !u!1 &2125966047
 GameObject:
   m_ObjectHideFlags: 0

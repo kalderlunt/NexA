@@ -95,6 +95,9 @@ namespace NexA.Hub.Components
         // ── Animation ─────────────────────────────────────────────────
         [Header("Animation")]
         [SerializeField] private CanvasGroup canvasGroup;
+        [SerializeField] private float fadeInDuration = 0.3f;
+        [SerializeField] private float fadeOutDuration = 0.2f;
+        [SerializeField] private float staggerDelay = 0.04f;
 
         // ── État interne ───────────────────────────────────────────────
         private List<FolderDetail>          cachedFolders = new();
@@ -396,7 +399,7 @@ namespace NexA.Hub.Components
             if (canvasGroup)
             {
                 canvasGroup.alpha = 0f;
-                canvasGroup.DOFade(1f, 0.3f).SetEase(Ease.OutCubic);
+                canvasGroup.DOFade(1f, fadeInDuration).SetEase(Ease.OutCubic);
             }
 
             await RefreshAsync();
@@ -416,7 +419,7 @@ namespace NexA.Hub.Components
             }
 
             if (canvasGroup)
-                canvasGroup.DOFade(0f, 0.2f).OnComplete(() => gameObject.SetActive(false));
+                canvasGroup.DOFade(0f, fadeOutDuration).OnComplete(() => gameObject.SetActive(false));
             else
                 gameObject.SetActive(false);
         }
@@ -545,7 +548,7 @@ namespace NexA.Hub.Components
                         DefaultFolder.FolderId = folder.id;
                         // Header du groupe GÉNÉRAL
                         cursor = folderContainer.AnimateHeaderIn(cursor);
-                        cursor += 0.04f;
+                        cursor += staggerDelay;
                     }
                     else
                     {
@@ -563,7 +566,7 @@ namespace NexA.Hub.Components
 
                         // Header du dossier custom
                         cursor = folderContainer.AnimateHeaderIn(cursor);
-                        cursor += 0.04f;
+                        cursor += staggerDelay;
                     }
 
                     // Séparer en ligne / hors ligne dans ce dossier
@@ -593,14 +596,14 @@ namespace NexA.Hub.Components
                         friendshipIdMap.TryGetValue(friend.id, out string fid);
                         FriendSidePanelRow row = CreateFriendRow(friend, target, fid);
                         cursor = row.AnimateIn(cursor);
-                        cursor += 0.04f;
+                        cursor += staggerDelay;
                         totalOnline++;
                     }
 
                     if (groupOffline && offlineFriends.Count > 0)
                     {
                         cursor = ShowOfflineFolder(offlineFriends, friendshipIdMap, friendsContainer, cursor);
-                        cursor += 0.04f;
+                        cursor += staggerDelay;
                     }
                     else
                     {
@@ -609,7 +612,7 @@ namespace NexA.Hub.Components
                             friendshipIdMap.TryGetValue(friend.id, out string fid);
                             FriendSidePanelRow row = CreateFriendRow(friend, target, fid);
                             cursor = row.AnimateIn(cursor);
-                            cursor += 0.04f;
+                            cursor += staggerDelay;
                         }
                     }
 
@@ -678,7 +681,7 @@ namespace NexA.Hub.Components
 
             // Animer le header dans le curseur global
             cursor = offlineFolder.AnimateHeaderIn(cursor);
-            cursor += 0.04f;
+            cursor += staggerDelay;
 
             // Peupler et animer les rows
             foreach (Friend friend in offlineFriends)
@@ -687,7 +690,7 @@ namespace NexA.Hub.Components
                 friendshipIdMap?.TryGetValue(friend.id, out fid);
                 FriendSidePanelRow row = CreateFriendRow(friend, offlineFolder.friendContainer, fid);
                 cursor = row.AnimateIn(cursor);
-                cursor += 0.04f;
+                cursor += staggerDelay;
             }
 
             return cursor;

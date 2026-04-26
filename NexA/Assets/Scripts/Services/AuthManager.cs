@@ -32,7 +32,7 @@ namespace NexA.Hub.Services
         /// <summary>
         /// L'utilisateur est-il authentifié ?
         /// </summary>
-        public bool IsAuthenticated => !string.IsNullOrEmpty(_accessToken);
+        public bool IsAuthenticated => !string.IsNullOrEmpty(APIService.Instance?.GetAccessToken());
 
         /// <summary>
         /// Utilisateur actuellement connecté
@@ -43,10 +43,6 @@ namespace NexA.Hub.Services
 
         #region Private Fields
 
-        private string _accessToken;
-        private string _refreshToken;
-        private DateTime _tokenExpiresAt;
-
         private const string REFRESH_TOKEN_KEY = "nexa_refresh_token";
 
         #endregion
@@ -55,7 +51,6 @@ namespace NexA.Hub.Services
 
         private void Awake()
         {
-            // Singleton pattern
             if (Instance != null && Instance != this)
             {
                 Destroy(gameObject);
@@ -64,17 +59,6 @@ namespace NexA.Hub.Services
 
             Instance = this;
             DontDestroyOnLoad(gameObject);
-
-            // Charger le refresh token si persistance activée
-            if (persistTokens)
-            {
-                _refreshToken = SecureStorage.GetToken(REFRESH_TOKEN_KEY);
-                
-                if (!string.IsNullOrEmpty(_refreshToken))
-                {
-                    Debug.Log("[AuthManager] Refresh token chargé depuis le stockage");
-                }
-            }
         }
 
         #endregion
@@ -94,58 +78,39 @@ namespace NexA.Hub.Services
         {
             try
             {
-                Debug.Log($"[AuthManager] Tentative d'inscription pour {username} ({email}) avec code de vérification");
+                Debug.Log($"[AuthManager] Tentative d'inscription pour {username} ({email})");
 
                 AuthResponse response = await APIService.Instance.RegisterWithCodeAsync(username, email, password, verificationCode);
-                
-                // Vérifier que la réponse contient bien les données nécessaires
-                if (response == null)
-                {
-                    Debug.LogError("[AuthManager] ❌ Réponse d'inscription null !");
-                    throw new AuthException("Le serveur n'a pas retourné de réponse valide");
-                }
-                
-                Debug.Log($"[AuthManager] 📦 Réponse reçue:");
-                Debug.Log($"  - User: {(response.user != null ? response.user.username : "NULL")}");
-                Debug.Log($"  - Tokens: {(response.tokens != null ? "PRÉSENT" : "NULL ⚠️")}");
-                
-                if (response.tokens == null)
-                {
-                    Debug.LogError("[AuthManager] ❌ ERREUR CRITIQUE: Le backend n'a pas retourné de tokens !");
-                    Debug.LogError("[AuthManager] Le backend doit retourner: { user: {...}, tokens: { accessToken, refreshToken, expiresIn } }");
-                    throw new AuthException("Le serveur n'a pas retourné les tokens d'authentification. Contactez l'administrateur.");
-                }
-                
-                if (response.user == null)
-                {
-                    Debug.LogError("[AuthManager] ❌ ERREUR: Le backend n'a pas retourné les données utilisateur !");
+
+                if (response?.user == null)
                     throw new AuthException("Le serveur n'a pas retourné les données utilisateur");
-                }
-                
-                StoreTokens(response.tokens);
+
                 CurrentUser = response.user;
+                PersistRefreshToken();
 
-                Debug.Log($"[AuthManager] ✅ Inscription réussie pour {CurrentUser.username} (ID: {CurrentUser.id})");
+                Debug.Log($"[AuthManager] Inscription réussie pour {CurrentUser.username} (ID: {CurrentUser.id})");
 
-                // Connecter le WebSocket STOMP pour les statuts d'amis en temps réel
                 if (FriendsManager.Instance != null)
-                    _ = FriendsManager.Instance.ConnectAsync(_accessToken, CurrentUser.id);
+                {
+                    string accessToken = APIService.Instance.GetAccessToken();
+                    if (!string.IsNullOrEmpty(accessToken))
+                        _ = FriendsManager.Instance.ConnectAsync(accessToken, CurrentUser.id);
+                }
 
                 return true;
             }
             catch (APIException ex)
             {
-                Debug.LogError($"[AuthManager] ❌ Échec de l'inscription: {ex.Code} - {ex.Message}");
+                Debug.LogError($"[AuthManager] Échec de l'inscription: {ex.Code} - {ex.Message}");
                 throw new AuthException(GetFriendlyErrorMessage(ex.Code), ex);
             }
             catch (AuthException)
             {
-                // Re-throw AuthException sans wrapper
                 throw;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[AuthManager] ❌ Erreur inattendue lors de l'inscription: {ex.Message}");
+                Debug.LogError($"[AuthManager] Erreur inattendue lors de l'inscription: {ex.Message}");
                 Debug.LogException(ex);
                 throw new AuthException("Une erreur inattendue s'est produite. Veuillez réessayer.", ex);
             }
@@ -161,15 +126,18 @@ namespace NexA.Hub.Services
                 Debug.Log($"[AuthManager] Tentative de connexion pour {username}");
 
                 var response = await APIService.Instance.LoginAsync(username, password);
-                
-                StoreTokens(response.tokens);
+
                 CurrentUser = response.user;
+                PersistRefreshToken();
 
                 Debug.Log($"[AuthManager] Connexion réussie pour {CurrentUser.username} (ID: {CurrentUser.id})");
 
-                // Connecter le WebSocket STOMP pour les statuts d'amis en temps réel
                 if (FriendsManager.Instance != null)
-                    _ = FriendsManager.Instance.ConnectAsync(_accessToken, CurrentUser.id);
+                {
+                    string accessToken = APIService.Instance.GetAccessToken();
+                    if (!string.IsNullOrEmpty(accessToken))
+                        _ = FriendsManager.Instance.ConnectAsync(accessToken, CurrentUser.id);
+                }
 
                 return CurrentUser;
             }
@@ -216,14 +184,14 @@ namespace NexA.Hub.Services
         /// </summary>
         public async Task<string> GetValidAccessTokenAsync()
         {
-            // Si token encore valide (avec marge de 30s pour éviter les race conditions)
-            if (!string.IsNullOrEmpty(_accessToken) && DateTime.UtcNow < _tokenExpiresAt.AddSeconds(-30))
-            {
-                return _accessToken;
-            }
+            string accessToken = APIService.Instance.GetAccessToken();
+            DateTime expiry = APIService.Instance.GetAccessTokenExpiry();
 
-            // Token expiré, on doit le refresh
-            if (string.IsNullOrEmpty(_refreshToken))
+            if (!string.IsNullOrEmpty(accessToken) && DateTime.UtcNow < expiry.AddSeconds(-30))
+                return accessToken;
+
+            string refreshToken = APIService.Instance.GetCookieValue("refresh_token");
+            if (string.IsNullOrEmpty(refreshToken))
             {
                 Debug.LogError("[AuthManager] Pas de refresh token disponible");
                 throw new AuthException("Session expirée. Veuillez vous reconnecter.");
@@ -232,14 +200,17 @@ namespace NexA.Hub.Services
             try
             {
                 Debug.Log("[AuthManager] Access token expiré, rafraîchissement en cours...");
-                
-                var response = await APIService.Instance.RefreshTokenAsync(_refreshToken);
-                
-                _accessToken = response.accessToken;
-                _tokenExpiresAt = DateTime.UtcNow.AddSeconds(response.expiresIn);
-                
-                Debug.Log($"[AuthManager] Token rafraîchi avec succès. Expire à: {_tokenExpiresAt}");
-                return _accessToken;
+
+                await APIService.Instance.RefreshTokenAsync();
+
+                accessToken = APIService.Instance.GetAccessToken();
+                if (string.IsNullOrEmpty(accessToken))
+                    throw new Exception("Le serveur n'a pas retourné de nouveau token");
+
+                PersistRefreshToken();
+
+                Debug.Log($"[AuthManager] Token rafraîchi. Expire à: {APIService.Instance.GetAccessTokenExpiry()}");
+                return accessToken;
             }
             catch (Exception ex)
             {
@@ -256,7 +227,19 @@ namespace NexA.Hub.Services
         /// </summary>
         public async Task<bool> TryRestoreSessionAsync()
         {
-            if (string.IsNullOrEmpty(_refreshToken))
+            // Restaurer le refresh token persisté dans le cookie jar
+            if (persistTokens)
+            {
+                string storedRefreshToken = SecureStorage.GetToken(REFRESH_TOKEN_KEY);
+                if (!string.IsNullOrEmpty(storedRefreshToken))
+                {
+                    APIService.Instance.SetCookie("refresh_token", storedRefreshToken);
+                    Debug.Log("[AuthManager] Refresh token restauré depuis le stockage");
+                }
+            }
+
+            string refreshToken = APIService.Instance.GetCookieValue("refresh_token");
+            if (string.IsNullOrEmpty(refreshToken))
             {
                 Debug.Log("[AuthManager] Pas de refresh token, impossible de restaurer la session");
                 return false;
@@ -265,20 +248,18 @@ namespace NexA.Hub.Services
             try
             {
                 Debug.Log("[AuthManager] Tentative de restauration de la session...");
-                
-                // Refresh le token d'accès
-                var tokenResponse = await APIService.Instance.RefreshTokenAsync(_refreshToken);
-                _accessToken = tokenResponse.accessToken;
-                _tokenExpiresAt = DateTime.UtcNow.AddSeconds(tokenResponse.expiresIn);
-                
-                // Récupérer les infos utilisateur
+
+                await APIService.Instance.RefreshTokenAsync();
                 CurrentUser = await APIService.Instance.GetCurrentUserAsync();
-                
+
                 Debug.Log($"[AuthManager] Session restaurée pour {CurrentUser.username}");
 
-                // Connecter le WebSocket STOMP pour les statuts d'amis en temps réel
                 if (FriendsManager.Instance != null)
-                    _ = FriendsManager.Instance.ConnectAsync(_accessToken, CurrentUser.id);
+                {
+                    string accessToken = APIService.Instance.GetAccessToken();
+                    if (!string.IsNullOrEmpty(accessToken))
+                        _ = FriendsManager.Instance.ConnectAsync(accessToken, CurrentUser.id);
+                }
 
                 return true;
             }
@@ -294,39 +275,21 @@ namespace NexA.Hub.Services
 
         #region Private Methods
 
-        /// <summary>
-        /// Stocke les tokens en mémoire (et optionnellement en persistance)
-        /// </summary>
-        private void StoreTokens(TokenData tokens)
+        private void PersistRefreshToken()
         {
-            if (tokens == null)
-            {
-                Debug.LogError("[AuthManager] TokenData null reçu");
-                return;
-            }
+            if (!persistTokens) return;
 
-            _accessToken = tokens.accessToken;
-            _refreshToken = tokens.refreshToken;
-            _tokenExpiresAt = DateTime.UtcNow.AddSeconds(tokens.expiresIn);
-
-            // Persistance du refresh token si activée
-            if (persistTokens && !string.IsNullOrEmpty(_refreshToken))
+            string refreshToken = APIService.Instance.GetCookieValue("refresh_token");
+            if (!string.IsNullOrEmpty(refreshToken))
             {
-                SecureStorage.SaveToken(REFRESH_TOKEN_KEY, _refreshToken);
+                SecureStorage.SaveToken(REFRESH_TOKEN_KEY, refreshToken);
                 Debug.Log("[AuthManager] Refresh token persisté");
             }
-
-            Debug.Log($"[AuthManager] Tokens stockés. Expire à: {_tokenExpiresAt:yyyy-MM-dd HH:mm:ss}");
         }
 
-        /// <summary>
-        /// Efface tous les tokens (mémoire + persistance)
-        /// </summary>
         private void ClearTokens()
         {
-            _accessToken = null;
-            _refreshToken = null;
-            _tokenExpiresAt = DateTime.MinValue;
+            APIService.Instance?.ClearCookies();
 
             if (persistTokens)
             {

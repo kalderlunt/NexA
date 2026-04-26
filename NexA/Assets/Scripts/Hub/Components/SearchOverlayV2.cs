@@ -350,6 +350,7 @@ namespace NexA.Hub.Components
 
                 try
                 {
+                    
                     _allFriends = await APIService.Instance.GetFriendsAsync();
                     if (loadingIndicator) loadingIndicator.SetActive(false);
                     ShowAll();
