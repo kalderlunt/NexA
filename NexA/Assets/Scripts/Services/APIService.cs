@@ -29,7 +29,11 @@ namespace NexA.Hub.Services
         [SerializeField] private int timeoutSeconds = 10;
         [SerializeField] private int maxRetries = 3;
         [SerializeField] private float retryDelaySeconds = 1f;
-        
+
+        [Header("Cookie Auth")]
+        [Tooltip("Durée de vie estimée de l'access_token cookie (en secondes)")]
+        [SerializeField] private int accessTokenLifetimeSeconds = 900;
+
         [Header("Testing Mode")]
         [Tooltip("Mode de vérification: true = backend réel, false = mode test (simulation)")]
         [SerializeField] private bool checkToBackend = true;
@@ -45,6 +49,94 @@ namespace NexA.Hub.Services
 
         /// <summary>Port du backend (ex: "8080").</summary>
         public string Port => port;
+
+        #region Cookie Management
+
+        private readonly Dictionary<string, string> _cookieJar = new();
+        private DateTime _accessTokenExpiresAt = DateTime.MinValue;
+
+        /// <summary>Valeur de l'access_token cookie (pour STOMP WebSocket).</summary>
+        public string GetAccessToken()
+        {
+            _cookieJar.TryGetValue("access_token", out string token);
+            return token;
+        }
+
+        /// <summary>Date d'expiration estimée de l'access token.</summary>
+        public DateTime GetAccessTokenExpiry() => _accessTokenExpiresAt;
+
+        /// <summary>Récupère la valeur d'un cookie par nom.</summary>
+        public string GetCookieValue(string name)
+        {
+            _cookieJar.TryGetValue(name, out string value);
+            return value;
+        }
+
+        /// <summary>Définit un cookie manuellement (ex: restauration refresh_token).</summary>
+        public void SetCookie(string name, string value)
+        {
+            if (!string.IsNullOrEmpty(value))
+                _cookieJar[name] = value;
+            else
+                _cookieJar.Remove(name);
+        }
+
+        /// <summary>Supprime tous les cookies stockés.</summary>
+        public void ClearCookies()
+        {
+            _cookieJar.Clear();
+            _accessTokenExpiresAt = DateTime.MinValue;
+        }
+
+        private void ProcessResponseCookies(UnityWebRequest request)
+        {
+            string setCookie = request.GetResponseHeader("Set-Cookie");
+            if (string.IsNullOrEmpty(setCookie)) return;
+
+            ExtractNamedCookie(setCookie, "access_token");
+            ExtractNamedCookie(setCookie, "refresh_token");
+        }
+
+        private void ExtractNamedCookie(string header, string cookieName)
+        {
+            string prefix = cookieName + "=";
+            int startIdx = header.IndexOf(prefix, StringComparison.Ordinal);
+            if (startIdx < 0) return;
+
+            // S'assurer qu'on matche le nom complet (pas un sous-mot)
+            if (startIdx > 0 && char.IsLetterOrDigit(header[startIdx - 1]))
+                return;
+
+            int valueStart = startIdx + prefix.Length;
+            int valueEnd = header.IndexOf(';', valueStart);
+            if (valueEnd < 0) valueEnd = header.Length;
+
+            string value = header.Substring(valueStart, valueEnd - valueStart).Trim();
+            if (string.IsNullOrEmpty(value)) return;
+
+            _cookieJar[cookieName] = value;
+
+            if (cookieName == "access_token")
+            {
+                _accessTokenExpiresAt = DateTime.UtcNow.AddSeconds(accessTokenLifetimeSeconds);
+                Debug.Log($"[APIService] Cookie access_token extrait, expire à: {_accessTokenExpiresAt:HH:mm:ss}");
+            }
+        }
+
+        private void AddCookieHeader(UnityWebRequest request)
+        {
+            if (_cookieJar.Count == 0) return;
+
+            var sb = new StringBuilder();
+            foreach (var kv in _cookieJar)
+            {
+                if (sb.Length > 0) sb.Append("; ");
+                sb.Append(kv.Key).Append('=').Append(kv.Value);
+            }
+            request.SetRequestHeader("Cookie", sb.ToString());
+        }
+
+        #endregion
 
         private void Awake()
         {
@@ -69,16 +161,12 @@ namespace NexA.Hub.Services
         public async Task<AuthResponse> LoginAsync(string username, string password)
         {
             var body = new { username, password };
-            string bodyJson = JsonConvert.SerializeObject(body);
-            Debug.Log($"  Body JSON: {bodyJson}");
-            
             return await SendRequestAsync<AuthResponse>($"/{extAPI}/{extAPIAuth}/login", "POST", body, requiresAuth: false);
         }
 
-        public async Task<RefreshResponse> RefreshTokenAsync(string refreshToken)
+        public async Task RefreshTokenAsync()
         {
-            var body = new { refreshToken };
-            return await SendRequestAsync<RefreshResponse>($"/{extAPI}/{extAPIAuth}/refresh", "POST", body, requiresAuth: false);
+            await SendRequestAsync<EmptyResponse>($"/{extAPI}/{extAPIAuth}/refresh", "POST", requiresAuth: false);
         }
 
         public async Task LogoutAsync()
@@ -317,12 +405,14 @@ namespace NexA.Hub.Services
             
             using (UnityWebRequest request = CreateRequest(url, method, body))
             {
-                // Auth header
+                // Auto-refresh si l'access token est expiré
                 if (requiresAuth)
                 {
-                    string token = await AuthManager.Instance.GetValidAccessTokenAsync();
-                    request.SetRequestHeader("Authorization", $"Bearer {token}");
+                    await AuthManager.Instance.GetValidAccessTokenAsync();
                 }
+
+                // Cookies d'authentification
+                AddCookieHeader(request);
 
                 // Correlation ID pour traçabilité logs backend
                 string correlationId = Guid.NewGuid().ToString();
@@ -335,6 +425,9 @@ namespace NexA.Hub.Services
                 // Envoyer
                 Debug.Log($"[API] {method} {url} | Correlation: {correlationId}");
                 await request.SendWebRequest();
+
+                // Extraire les cookies de la réponse (access_token, refresh_token)
+                ProcessResponseCookies(request);
 
                 // Gérer les erreurs
                 if (request.result != UnityWebRequest.Result.Success)
@@ -585,17 +678,6 @@ namespace NexA.Hub.Services
                 if (result != null)
                 {
                     Debug.Log($"[API] ✅ Successfully parsed {typeof(T).Name}");
-                    
-                    // Log spécial pour AuthResponse pour voir les tokens
-                    if (result is AuthResponse authResponse)
-                    {
-                        Debug.Log($"[API] 🔑 Token Data:");
-                        Debug.Log($"  User: {authResponse.user?.username ?? "null"}");
-                        Debug.Log($"  Access Token: {authResponse.tokens?.accessToken?.Substring(0, Math.Min(20, authResponse.tokens.accessToken?.Length ?? 0)) ?? "null"}...");
-                        Debug.Log($"  Refresh Token: {authResponse.tokens?.refreshToken?.Substring(0, Math.Min(20, authResponse.tokens.refreshToken?.Length ?? 0)) ?? "null"}...");
-                        Debug.Log($"  Expires In: {authResponse.tokens?.expiresIn ?? 0}");
-                    }
-                    
                     return result;
                 }
 
