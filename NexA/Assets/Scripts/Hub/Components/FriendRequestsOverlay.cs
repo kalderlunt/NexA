@@ -285,8 +285,7 @@ namespace NexA.Hub.Components
                 {
                     await APIService.Instance.AcceptFriendRequestAsync(friendshipId);
                     ToastManager.Show("Demande acceptée !", ToastType.Success);
-                    // Rafraîchir le SocialPanel pour afficher le nouvel ami
-                    SocialPanel.Instance?.RefreshAsync();
+                    // Le SocialPanel se rafraîchit via l'event STOMP OnFriendAccepted (les deux côtés)
                 }
                 else
                 {
@@ -311,7 +310,9 @@ namespace NexA.Hub.Components
         {
             if (!itemsContainer) return;
 
-            int remaining = itemsContainer.childCount;
+            // -1 car l'item animé (AnimateOut) est encore enfant quand onComplete se déclenche
+            // (Destroy est différé à la fin du frame Unity)
+            int remaining = Mathf.Max(0, itemsContainer.childCount - 1);
 
             if (titleText) titleText.text = remaining > 0
                 ? $"Demandes reçues ({remaining})"

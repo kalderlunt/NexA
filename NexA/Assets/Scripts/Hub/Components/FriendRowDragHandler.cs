@@ -87,9 +87,11 @@ namespace NexA.Hub.Components
 
             if (ghost != null) { Destroy(ghost); ghost = null; }
 
-            // ── Raycast manuel pour trouver le FriendFolderContainer sous le pointeur ──
-            // On ne peut pas se fier à IDropHandler car le ScrollRect/Mask intercepte les events.
-            FriendFolderContainer targetFolder = FindFolderUnderPointer(eventData);
+            // ── Trouver le dossier cible : raycast manuel + fallback HoveredFolder ──
+            FriendFolderContainer targetFolder = FindFolderUnderPointer(eventData)
+                                                 ?? FriendFolderContainer.HoveredFolder;
+
+            Debug.Log($"[FriendRowDragHandler] OnEndDrag — targetFolder={targetFolder?.GroupName ?? "null"}, original={OriginalFolder?.GroupName ?? "null"}");
 
             if (targetFolder != null && targetFolder != OriginalFolder)
             {
@@ -139,12 +141,21 @@ namespace NexA.Hub.Components
             if (ghost == null || rootCanvas == null) return;
             if (ghostRect == null) ghostRect = ghost.GetComponent<RectTransform>();
 
-            Camera cam = rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : rootCanvas.worldCamera;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                rootCanvas.GetComponent<RectTransform>(),
-                eventData.position, cam,
-                out Vector2 local);
-            ghostRect.anchoredPosition = local;
+            if (rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay)
+            {
+                // En overlay, les coordonnées écran == coordonnées monde
+                ghostRect.position = eventData.position;
+            }
+            else
+            {
+                Camera cam = rootCanvas.worldCamera ?? Camera.main;
+                if (RectTransformUtility.ScreenPointToWorldPointInRectangle(
+                    rootCanvas.GetComponent<RectTransform>(),
+                    eventData.position, cam, out Vector3 worldPos))
+                {
+                    ghostRect.position = worldPos;
+                }
+            }
         }
 
         public void OnPointerClick(PointerEventData eventData)
