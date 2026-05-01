@@ -285,8 +285,7 @@ namespace NexA.Hub.Components
                 {
                     await APIService.Instance.AcceptFriendRequestAsync(friendshipId);
                     ToastManager.Show("Demande acceptée !", ToastType.Success);
-                    // Rafraîchir le SocialPanel pour afficher le nouvel ami
-                    SocialPanel.Instance?.RefreshAsync();
+                    // Le SocialPanel se rafraîchit via l'event STOMP OnFriendAccepted (les deux côtés)
                 }
                 else
                 {

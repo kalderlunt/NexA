@@ -136,9 +136,12 @@ namespace NexA.Hub.Components
             if (pendingBadge)
                 pendingBadge.SetActive(false);
 
-            // Écouter les changements de statut en temps réel
+            // Écouter les changements de statut et les acceptations d'ami en temps réel
             if (FriendsManager.Instance != null)
+            {
                 FriendsManager.Instance.OnFriendStatusChanged += OnFriendStatusChanged;
+                FriendsManager.Instance.OnFriendAccepted += OnFriendAccepted;
+            }
 
             // Créer les overlays et boutons par code s'ils ne sont pas assignés dans la scène
             EnsureOverlay();
@@ -852,6 +855,16 @@ namespace NexA.Hub.Components
         // ── Temps réel (WebSocket/STOMP) ──────────────────────────────
 
         /// <summary>
+        /// Appelé par FriendsManager quand une demande d'ami est acceptée côté backend.
+        /// Déclenché pour les deux utilisateurs impliqués.
+        /// </summary>
+        private async void OnFriendAccepted(FriendAcceptedNotification notification)
+        {
+            Debug.Log($"[SocialPanel] Nouvel ami via WS : {notification.username} — refresh liste");
+            await RefreshAsync();
+        }
+
+        /// <summary>
         /// Appelé par FriendsManager quand un ami change de statut via STOMP.
         /// Met à jour uniquement la row concernée + le cache local.
         /// </summary>
@@ -982,7 +995,10 @@ namespace NexA.Hub.Components
         {
             // Se désabonner des événements temps réel
             if (FriendsManager.Instance != null)
+            {
                 FriendsManager.Instance.OnFriendStatusChanged -= OnFriendStatusChanged;
+                FriendsManager.Instance.OnFriendAccepted -= OnFriendAccepted;
+            }
 
             addFriendButton?.onClick.RemoveAllListeners();
             addGroupButton?.onClick.RemoveAllListeners();
