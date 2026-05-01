@@ -38,6 +38,12 @@ namespace NexA.Hub.Services
         /// </summary>
         public event Action<FriendAcceptedNotification> OnFriendAccepted;
 
+        /// <summary>
+        /// Déclenché quand une relation d'amitié est supprimée (les deux côtés reçoivent cet event).
+        /// Émis par le backend via STOMP /topic/friend-removed.{userId}.
+        /// </summary>
+        public event Action<FriendRemovedNotification> OnFriendRemoved;
+
         #endregion
 
         #region Configuration
@@ -233,6 +239,11 @@ namespace NexA.Hub.Services
             string friendReqDest = $"/topic/friend-request.{_userId}";
             await _ws.SendText(StompClient.BuildSubscribeFrame("sub-friend-request", friendReqDest));
             Debug.Log($"[FriendsManager] Abonné à {friendReqDest}");
+
+            // Suppressions d'ami (les deux côtés)
+            string friendRemovedDest = $"/topic/friend-removed.{_userId}";
+            await _ws.SendText(StompClient.BuildSubscribeFrame("sub-friend-removed", friendRemovedDest));
+            Debug.Log($"[FriendsManager] Abonné à {friendRemovedDest}");
         }
 
         private void OnStompMessage(StompClient.StompFrame frame)
@@ -250,6 +261,17 @@ namespace NexA.Hub.Services
                     {
                         Debug.Log($"[FriendsManager] Demande acceptée — nouvel ami : {notification.username}");
                         OnFriendAccepted?.Invoke(notification);
+                    }
+                    return;
+                }
+
+                if (subId == "sub-friend-removed")
+                {
+                    var notification = JsonConvert.DeserializeObject<FriendRemovedNotification>(frame.Body);
+                    if (notification != null)
+                    {
+                        Debug.Log($"[FriendsManager] Ami supprimé — friendshipId : {notification.friendshipId}");
+                        OnFriendRemoved?.Invoke(notification);
                     }
                     return;
                 }
@@ -342,5 +364,19 @@ namespace NexA.Hub.Services
         public string friendshipId;
         public string userId;      // ID du nouvel ami
         public string username;    // Pseudo du nouvel ami
+    }
+
+    /// <summary>
+    /// Message reçu via STOMP quand une relation d'amitié est supprimée.
+    /// Émis par le backend sur /topic/friend-removed.{userId} pour les deux parties.
+    /// Format backend : { "type": "FRIEND_REMOVED", "friendshipId": "...", "userId": "...", "username": "..." }
+    /// </summary>
+    [Serializable]
+    public class FriendRemovedNotification
+    {
+        public string type;        // "FRIEND_REMOVED"
+        public string friendshipId;
+        public string userId;      // ID de l'ami retiré
+        public string username;    // Pseudo de l'ami retiré
     }
 }

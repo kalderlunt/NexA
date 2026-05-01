@@ -310,7 +310,9 @@ namespace NexA.Hub.Components
         {
             if (!itemsContainer) return;
 
-            int remaining = itemsContainer.childCount;
+            // -1 car l'item animé (AnimateOut) est encore enfant quand onComplete se déclenche
+            // (Destroy est différé à la fin du frame Unity)
+            int remaining = Mathf.Max(0, itemsContainer.childCount - 1);
 
             if (titleText) titleText.text = remaining > 0
                 ? $"Demandes reçues ({remaining})"

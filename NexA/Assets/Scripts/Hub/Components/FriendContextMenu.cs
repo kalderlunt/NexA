@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using DG.Tweening;
 using NexA.Hub.Services;
 using NexA.Hub.Models;
@@ -232,10 +233,31 @@ namespace NexA.Hub.Components
         private void Show(Vector2 screenPos)
         {
             CloseSubMenu();
+
+            // Déplacer au root Canvas pour éviter le clipping du SocialPanel (RectMask2D)
+            Canvas root = FindRootCanvas();
+            if (root != null && transform.parent != root.transform)
+            {
+                transform.SetParent(root.transform, false);
+                rootCanvas = root;
+            }
+
+            // Toujours au premier plan
+            transform.SetAsLastSibling();
+
             PositionNearCursor(screenPos);
             gameObject.SetActive(true);
             cg.alpha = 0f;
             cg.DOFade(1f, 0.12f).SetEase(Ease.OutCubic);
+        }
+
+        private Canvas FindRootCanvas()
+        {
+            if (rootCanvas != null && rootCanvas.isRootCanvas) return rootCanvas;
+            Canvas[] canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+            foreach (Canvas c in canvases)
+                if (c.isRootCanvas) return c;
+            return rootCanvas;
         }
 
         private void ClearItems(Transform container)
@@ -366,12 +388,20 @@ namespace NexA.Hub.Components
         {
             if (!targetRow) return;
 
-            FriendSidePanelRow row = targetRow.GetComponent<FriendSidePanelRow>();
-            if (row == null || string.IsNullOrEmpty(row.FriendId)) return;
+            string friendshipId = targetRow.FriendshipId;
+            if (string.IsNullOrEmpty(friendshipId))
+            {
+                Debug.LogError("[FriendContextMenu] FriendshipId manquant — impossible de supprimer l'ami.");
+                ToastManager.Show("Erreur : ID d'amitié introuvable", ToastType.Error);
+                return;
+            }
 
             try
             {
-                await APIService.Instance.RemoveFriendAsync(row.FriendId);
+                // Signaler au SocialPanel que c'est nous qui supprimons (évite le rebond STOMP)
+                SocialPanel.Instance?.RegisterSelfRemoval(friendshipId);
+
+                await APIService.Instance.RemoveFriendAsync(friendshipId);
                 ToastManager.Show("Ami retiré", ToastType.Info);
 
                 // Retirer visuellement
@@ -403,20 +433,54 @@ namespace NexA.Hub.Components
 
         // ── Update (fermer si clic ailleurs) ──────────────────────────
 
-        private void Update()
-        {
-            if (!gameObject.activeSelf) return;
-            if (!Input.GetMouseButtonDown(0) && !Input.GetMouseButtonDown(1)) return;
-            if (!panel) return;
+        private InputAction _clickAction;
+        private InputAction _rightClickAction;
 
-            // Clic hors du panel principal ET hors du sous-menu → fermer
+        private void OnEnable()
+        {
+            // Créer les actions à la volée si pas encore initialisées
+            if (_clickAction == null)
+            {
+                _clickAction = new InputAction("LeftClick", InputActionType.Button,
+                    binding: "<Mouse>/leftButton");
+                _clickAction.performed += OnAnyClick;
+            }
+            if (_rightClickAction == null)
+            {
+                _rightClickAction = new InputAction("RightClick", InputActionType.Button,
+                    binding: "<Mouse>/rightButton");
+                _rightClickAction.performed += OnAnyClick;
+            }
+
+            _clickAction.Enable();
+            _rightClickAction.Enable();
+        }
+
+        private void OnDisable()
+        {
+            _clickAction?.Disable();
+            _rightClickAction?.Disable();
+        }
+
+        private void OnDestroy()
+        {
+            _clickAction?.Dispose();
+            _rightClickAction?.Dispose();
+        }
+
+        private void OnAnyClick(InputAction.CallbackContext ctx)
+        {
+            if (!gameObject.activeSelf || !panel) return;
+
+            Vector2 mousePos = Mouse.current.position.ReadValue();
+
             bool inMain = RectTransformUtility.RectangleContainsScreenPoint(
-                panel, Input.mousePosition,
+                panel, mousePos,
                 rootCanvas?.renderMode == RenderMode.ScreenSpaceOverlay ? null : rootCanvas?.worldCamera);
 
             bool inSub = subPanel && subPanel.gameObject.activeSelf &&
                          RectTransformUtility.RectangleContainsScreenPoint(
-                             subPanel, Input.mousePosition,
+                             subPanel, mousePos,
                              rootCanvas?.renderMode == RenderMode.ScreenSpaceOverlay ? null : rootCanvas?.worldCamera);
 
             if (!inMain && !inSub)
@@ -425,15 +489,34 @@ namespace NexA.Hub.Components
 
         private void PositionNearCursor(Vector2 screenPos)
         {
-            if (!panel || !rootCanvas) return;
+            if (!panel) return;
 
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(
-                rootCanvas.GetComponent<RectTransform>(), screenPos,
-                rootCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : rootCanvas.worldCamera,
-                out Vector2 local);
+            if (rootCanvas != null && rootCanvas.renderMode != RenderMode.ScreenSpaceOverlay)
+            {
+                // Mode Camera : conversion via RectTransformUtility
+                Camera cam = rootCanvas.worldCamera ?? Camera.main;
+                RectTransformUtility.ScreenPointToLocalPointInRectangle(
+                    rootCanvas.GetComponent<RectTransform>(), screenPos, cam, out Vector2 local);
+                panel.anchoredPosition = local;
+            }
+            else
+            {
+                // ScreenSpaceOverlay : coords écran == coords monde du canvas
+                // Forcer un rebuild pour obtenir la vraie hauteur du menu
+                Canvas.ForceUpdateCanvases();
 
-            // Décalage pour rester dans l'écran (simple)
-            panel.anchoredPosition = local;
+                float menuW = panel.rect.width;
+                float menuH = panel.rect.height;
+
+                // Ajuster pour ne pas sortir de l'écran
+                float x = screenPos.x;
+                float y = screenPos.y;
+
+                if (x + menuW > Screen.width)  x = screenPos.x - menuW;
+                if (y - menuH < 0)             y = screenPos.y + menuH;
+
+                panel.position = new Vector3(x, y, 0f);
+            }
         }
     }
 }
