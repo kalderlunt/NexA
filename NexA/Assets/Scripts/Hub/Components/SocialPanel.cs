@@ -108,6 +108,9 @@ namespace NexA.Hub.Components
         // Source de vérité pour tous les dossiers actifs (GÉNÉRAL + custom)
         private readonly HashSet<FriendFolderContainer> activeFolders = new();
 
+        /// <summary>FriendshipIds supprimés localement — pour ignorer le rebond STOMP.</summary>
+        private readonly HashSet<string> _selfInitiatedRemovals = new();
+
         private FriendFolderContainer DefaultFolder => generalFolder;
 
         /// <summary>Dossier GÉNÉRAL accessible par FriendFolderContainer pour la migration d'amis.</summary>
@@ -136,9 +139,13 @@ namespace NexA.Hub.Components
             if (pendingBadge)
                 pendingBadge.SetActive(false);
 
-            // Écouter les changements de statut en temps réel
+            // Écouter les changements de statut et les acceptations d'ami en temps réel
             if (FriendsManager.Instance != null)
+            {
                 FriendsManager.Instance.OnFriendStatusChanged += OnFriendStatusChanged;
+                FriendsManager.Instance.OnFriendAccepted      += OnFriendAccepted;
+                FriendsManager.Instance.OnFriendRemoved       += OnFriendRemoved;
+            }
 
             // Créer les overlays et boutons par code s'ils ne sont pas assignés dans la scène
             EnsureOverlay();
@@ -377,6 +384,51 @@ namespace NexA.Hub.Components
                 pendingBadgeText.alignment = TMPro.TextAlignmentOptions.Center;
 
                 Debug.Log("[SocialPanel] NotificationsButton créé par code.");
+            }
+
+            // ── FriendContextMenu ──────────────────────────────────────
+            if (!FriendContextMenu.Instance)
+            {
+                GameObject ctxGO = new GameObject("FriendContextMenu");
+                ctxGO.transform.SetParent(transform, false);
+                ctxGO.layer = gameObject.layer;
+
+                // Le panel flottant du menu contextuel
+                RectTransform panelRT = ctxGO.AddComponent<RectTransform>();
+                panelRT.sizeDelta = new Vector2(160, 0);
+                panelRT.pivot     = new Vector2(0f, 1f);
+
+                UnityEngine.UI.Image bg = ctxGO.AddComponent<UnityEngine.UI.Image>();
+                bg.color = new Color(0.08f, 0.08f, 0.14f, 0.97f);
+
+                VerticalLayoutGroup vlg = ctxGO.AddComponent<VerticalLayoutGroup>();
+                vlg.padding = new RectOffset(0, 0, 4, 4);
+                vlg.spacing = 0f;
+                vlg.childForceExpandWidth  = true;
+                vlg.childForceExpandHeight = false;
+                vlg.childControlWidth  = true;
+                vlg.childControlHeight = true;
+
+                ContentSizeFitter csf = ctxGO.AddComponent<ContentSizeFitter>();
+                csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+                ctxGO.AddComponent<CanvasGroup>();
+
+                // Assigner le panel sur le composant (panel = lui-même)
+                FriendContextMenu ctx = ctxGO.AddComponent<FriendContextMenu>();
+
+                // Réflexion pour assigner le champ panel (privé) sans le rendre public
+                var panelField = typeof(FriendContextMenu)
+                    .GetField("panel", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                panelField?.SetValue(ctx, panelRT);
+
+                // itemsContainer = le GO lui-même (VLG dessus)
+                var itemsField = typeof(FriendContextMenu)
+                    .GetField("itemsContainer", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                itemsField?.SetValue(ctx, ctxGO.transform);
+
+                ctxGO.SetActive(false);
+                Debug.Log("[SocialPanel] FriendContextMenu créé par code.");
             }
 
             Debug.Log("[SocialPanel] EnsureOverlay OK.");
@@ -852,6 +904,103 @@ namespace NexA.Hub.Components
         // ── Temps réel (WebSocket/STOMP) ──────────────────────────────
 
         /// <summary>
+        /// Appelé par FriendsManager quand une demande d'ami est acceptée côté backend.
+        /// Crée directement la row dans le dossier GÉNÉRAL sans rechargement complet.
+        /// </summary>
+        private void OnFriendAccepted(FriendAcceptedNotification notification)
+        {
+            Debug.Log($"[SocialPanel] Nouvel ami via WS : {notification.username} — ajout de la row");
+
+            // Éviter le doublon si la row existe déjà (cas où on est l'initiateur de la demande)
+            if (FindRowByFriendId(notification.userId) != null)
+            {
+                Debug.Log($"[SocialPanel] Row déjà existante pour {notification.username} — ignoré");
+                return;
+            }
+
+            // Construire un Friend minimal depuis la notification
+            Friend newFriend = new Friend
+            {
+                id       = notification.userId,
+                username = notification.username,
+                status   = "ONLINE",   // un ami qui vient d'accepter est forcément en ligne
+                level    = 0,
+                elo      = 0
+            };
+
+            // Créer la row (sans parent pour l'instant — AddRow positionnera correctement)
+            FriendFolderContainer target = generalFolder;
+            FriendSidePanelRow row = CreateFriendRow(newFriend, friendsContainer, notification.friendshipId);
+            target?.AddRow(row.gameObject);  // re-parent dans friendContainer au bon index
+            row.AnimateIn(0f);
+
+            // Mettre à jour le badge en ligne
+            RefreshGroupHeaders();
+            HubTopBar.Instance?.SetFriendsOnlineBadge(CountOnlineFriends());
+
+            // Fermer le badge de demandes en attente (décrémenter)
+            _ = RefreshPendingBadgeAsync();
+        }
+
+        /// <summary>
+        /// Appelé par FriendsManager quand un ami nous supprime (ou qu'on est supprimé) via STOMP.
+        /// Retire la row en temps réel sans rechargement complet.
+        /// </summary>
+        private void OnFriendRemoved(FriendRemovedNotification notification)
+        {
+            Debug.Log($"[SocialPanel] Ami supprimé via WS : {notification.username} (friendshipId={notification.friendshipId})");
+
+            // Ignorer si c'est nous qui avons initié la suppression (l'UI est déjà à jour)
+            if (_selfInitiatedRemovals.Remove(notification.friendshipId))
+            {
+                Debug.Log($"[SocialPanel] Suppression self-initiated ignorée pour {notification.friendshipId}");
+                return;
+            }
+
+            // Chercher la row par friendshipId en priorité, sinon par userId
+            FriendSidePanelRow row = FindRowByFriendshipId(notification.friendshipId)
+                                     ?? FindRowByFriendId(notification.userId);
+
+            if (row == null)
+            {
+                Debug.LogWarning($"[SocialPanel] Row introuvable pour l'ami supprimé {notification.username}");
+                return;
+            }
+
+            // Retirer du dossier
+            FriendFolderContainer folder = row.GetComponentInParent<FriendFolderContainer>();
+            folder?.RemoveRow(row.gameObject);
+
+            // Supprimer le GO avec un petit fade
+            CanvasGroup cg = row.GetComponent<CanvasGroup>() ?? row.gameObject.AddComponent<CanvasGroup>();
+            cg.DOFade(0f, 0.2f).OnComplete(() =>
+            {
+                if (row != null) Destroy(row.gameObject);
+                RefreshGroupHeaders();
+                HubTopBar.Instance?.SetFriendsOnlineBadge(CountOnlineFriends());
+            });
+
+            ToastManager.Show($"{notification.username} vous a retiré de ses amis", ToastType.Info);
+        }
+
+        /// <summary>Cherche une FriendSidePanelRow par friendshipId dans tous les containers.</summary>
+        private FriendSidePanelRow FindRowByFriendshipId(string friendshipId)
+        {
+            if (string.IsNullOrEmpty(friendshipId)) return null;
+            foreach (FriendFolderContainer folder in activeFolders)
+            {
+                if (folder == null || folder.friendContainer == null) continue;
+                foreach (Transform child in folder.friendContainer)
+                {
+                    FriendSidePanelRow row = child.GetComponent<FriendSidePanelRow>();
+                    if (row != null && row.FriendshipId == friendshipId)
+                        return row;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Appelé par FriendsManager quand un ami change de statut via STOMP.
         /// Met à jour uniquement la row concernée + le cache local.
         /// </summary>
@@ -958,6 +1107,16 @@ namespace NexA.Hub.Components
         /// <summary>Retourne tous les dossiers actifs (GÉNÉRAL + custom).</summary>
         public HashSet<FriendFolderContainer> GetAllGroups() => activeFolders;
 
+        /// <summary>
+        /// Enregistre une suppression initiée localement pour que le rebond STOMP
+        /// /topic/friend-removed soit ignoré (l'UI est déjà mise à jour).
+        /// </summary>
+        public void RegisterSelfRemoval(string friendshipId)
+        {
+            if (!string.IsNullOrEmpty(friendshipId))
+                _selfInitiatedRemovals.Add(friendshipId);
+        }
+
         /// <summary>Met à jour les labels de tous les dossiers après un drag & drop.</summary>
         public void RefreshGroupHeaders()
         {
@@ -982,7 +1141,11 @@ namespace NexA.Hub.Components
         {
             // Se désabonner des événements temps réel
             if (FriendsManager.Instance != null)
+            {
                 FriendsManager.Instance.OnFriendStatusChanged -= OnFriendStatusChanged;
+                FriendsManager.Instance.OnFriendAccepted      -= OnFriendAccepted;
+                FriendsManager.Instance.OnFriendRemoved       -= OnFriendRemoved;
+            }
 
             addFriendButton?.onClick.RemoveAllListeners();
             addGroupButton?.onClick.RemoveAllListeners();

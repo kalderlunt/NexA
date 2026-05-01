@@ -60,6 +60,9 @@ namespace NexA.Hub.Components
         public string FolderId   { get; set; }   // ID backend du dossier — null pour les dossiers offline locaux
         public int    FriendCount => rows.Count;
 
+        /// <summary>Dossier actuellement survolé pendant un drag — fallback pour FriendRowDragHandler.</summary>
+        public static FriendFolderContainer HoveredFolder { get; private set; }
+
         // ── Init ──────────────────────────────────────────────────────
 
         private void Awake()
@@ -87,35 +90,21 @@ namespace NexA.Hub.Components
             headerButton?.onClick.AddListener(ToggleExpand);
             deleteButton?.onClick.AddListener(TryDelete);
 
+            // Clic droit sur le header → menu contextuel (via composant séparé pour ne pas bloquer Button.onClick)
+            if (headerButton)
+            {
+                var relay = headerButton.gameObject.AddComponent<RightClickRelay>();
+                relay.OnRightClick = (pos) => FriendContextMenu.Instance?.ShowForFolder(this, pos);
+            }
+
             // Double-clic sur le label → passer en mode édition
             if (groupNameLabel)
             {
                 EventTrigger trigger = groupNameLabel.gameObject.GetComponent<EventTrigger>()
                                        ?? groupNameLabel.gameObject.AddComponent<EventTrigger>();
-                EventTrigger.Entry entry = new EventTrigger.Entry
-                {
-                    eventID = EventTriggerType.PointerClick
-                };
+                EventTrigger.Entry entry = new EventTrigger.Entry { eventID = EventTriggerType.PointerClick };
                 entry.callback.AddListener((_) => OnLabelClicked());
                 trigger.triggers.Add(entry);
-            }
-
-            // Clic droit sur le header → menu contextuel dossier
-            if (headerButton)
-            {
-                EventTrigger headerTrigger = headerButton.gameObject.GetComponent<EventTrigger>()
-                                             ?? headerButton.gameObject.AddComponent<EventTrigger>();
-                EventTrigger.Entry rightClick = new EventTrigger.Entry
-                {
-                    eventID = EventTriggerType.PointerClick
-                };
-                rightClick.callback.AddListener((data) =>
-                {
-                    PointerEventData ped = (PointerEventData)data;
-                    if (ped.button == PointerEventData.InputButton.Right)
-                        FriendContextMenu.Instance?.ShowForFolder(this, ped.position);
-                });
-                headerTrigger.triggers.Add(rightClick);
             }
 
             UpdateUI();
@@ -327,9 +316,9 @@ namespace NexA.Hub.Components
         float currentFill;
         public void OnPointerEnter(PointerEventData eventData)
         {
-            if (!FriendRowDragHandler.CurrentlyDragged || !backgroundImage)
-                return;
-            
+            if (!FriendRowDragHandler.CurrentlyDragged) return;
+            HoveredFolder = this;
+            if (!backgroundImage) return;
             currentFill = backgroundImage.fillAmount;
             backgroundImage.DOColor(highlightColor, 0.15f);
             backgroundImage.DOFillAmount(1f, 0.2f).SetEase(Ease.OutCubic);
@@ -337,9 +326,9 @@ namespace NexA.Hub.Components
 
         public void OnPointerExit(PointerEventData eventData)
         {
-            if (!FriendRowDragHandler.CurrentlyDragged || !backgroundImage) 
-                return;
-            
+            if (!FriendRowDragHandler.CurrentlyDragged) return;
+            if (HoveredFolder == this) HoveredFolder = null;
+            if (!backgroundImage) return;
             float targetFill = isExpanded ? 1f : currentFill;
             backgroundImage.DOColor(normalColor, 0.15f);
             backgroundImage.DOFillAmount(targetFill, 0.2f).SetEase(Ease.OutCubic);
@@ -392,12 +381,87 @@ namespace NexA.Hub.Components
 
         private void BeginRename()
         {
-            if (IsDefault || !groupNameInput)
+            if (IsDefault) return;
+
+            // Créer dynamiquement l'InputField si non assigné dans l'Inspector
+            if (!groupNameInput && groupNameLabel)
+            {
+                GameObject inputGo = new GameObject("GroupNameInput", typeof(RectTransform));
+                inputGo.transform.SetParent(groupNameLabel.transform.parent, false);
+
+                // Copier le RectTransform du label
+                RectTransform labelRect = groupNameLabel.rectTransform;
+                RectTransform inputRect = inputGo.GetComponent<RectTransform>();
+                inputRect.anchorMin        = labelRect.anchorMin;
+                inputRect.anchorMax        = labelRect.anchorMax;
+                inputRect.offsetMin        = labelRect.offsetMin;
+                inputRect.offsetMax        = labelRect.offsetMax;
+                inputRect.pivot            = labelRect.pivot;
+                inputRect.anchoredPosition = labelRect.anchoredPosition;
+                inputRect.sizeDelta        = labelRect.sizeDelta;
+                inputRect.SetSiblingIndex(labelRect.GetSiblingIndex());
+
+                // Background transparent
+                Image bg = inputGo.AddComponent<Image>();
+                bg.color = new Color(0f, 0f, 0f, 0.4f);
+
+                // Zone de texte (viewport)
+                GameObject viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
+                viewportGo.transform.SetParent(inputGo.transform, false);
+                RectTransform vp = viewportGo.GetComponent<RectTransform>();
+                vp.anchorMin = Vector2.zero; vp.anchorMax = Vector2.one;
+                vp.offsetMin = new Vector2(4, 0); vp.offsetMax = new Vector2(-4, 0);
+
+                // Objet texte
+                GameObject textGo = new GameObject("Text", typeof(RectTransform));
+                textGo.transform.SetParent(viewportGo.transform, false);
+                RectTransform textRect = textGo.GetComponent<RectTransform>();
+                textRect.anchorMin = Vector2.zero; textRect.anchorMax = Vector2.one;
+                textRect.offsetMin = Vector2.zero; textRect.offsetMax = Vector2.zero;
+                TextMeshProUGUI tmpText = textGo.AddComponent<TextMeshProUGUI>();
+                tmpText.fontSize   = groupNameLabel.fontSize;
+                tmpText.color      = groupNameLabel.color;
+                tmpText.font       = groupNameLabel.font;
+                tmpText.alignment  = groupNameLabel.alignment;
+
+                // Objet placeholder
+                GameObject placeholderGo = new GameObject("Placeholder", typeof(RectTransform));
+                placeholderGo.transform.SetParent(viewportGo.transform, false);
+                RectTransform phRect = placeholderGo.GetComponent<RectTransform>();
+                phRect.anchorMin = Vector2.zero; phRect.anchorMax = Vector2.one;
+                phRect.offsetMin = Vector2.zero; phRect.offsetMax = Vector2.zero;
+                TextMeshProUGUI phText = placeholderGo.AddComponent<TextMeshProUGUI>();
+                phText.fontSize  = groupNameLabel.fontSize;
+                phText.color     = new Color(1f, 1f, 1f, 0.4f);
+                phText.font      = groupNameLabel.font;
+                phText.text      = "Nom du groupe…";
+                phText.fontStyle = FontStyles.Italic;
+
+                // Assembler le TMP_InputField
+                groupNameInput = inputGo.AddComponent<TMP_InputField>();
+                groupNameInput.textViewport   = vp;
+                groupNameInput.textComponent  = tmpText;
+                groupNameInput.placeholder     = phText;
+                groupNameInput.onEndEdit.AddListener(OnNameEditEnd);
+
+                inputGo.SetActive(false);
+            }
+
+            if (!groupNameInput)
+            {
+                Debug.LogWarning("[FriendFolderContainer] Impossible de créer le champ de renommage.");
                 return;
-            
+            }
+
             groupNameLabel?.gameObject.SetActive(false);
             groupNameInput.gameObject.SetActive(true);
             groupNameInput.text = groupName;
+            StartCoroutine(FocusInputNextFrame());
+        }
+
+        private System.Collections.IEnumerator FocusInputNextFrame()
+        {
+            yield return null; // attendre la prochaine frame pour que TMP initialise le champ
             groupNameInput.Select();
             groupNameInput.ActivateInputField();
         }
@@ -460,8 +524,8 @@ namespace NexA.Hub.Components
                 }
             }
 
-            // Rafraîchir depuis le serveur pour avoir l'état à jour
-            await SocialPanel.Instance.RefreshAsync();
+            // Supprimer visuellement sans recharger toute la liste
+            SocialPanel.Instance?.RefreshGroupHeaders();
 
             var cg = ResolveHeaderCG();
             cg.DOFade(0f, 0.2f).OnComplete(() => Destroy(gameObject));
@@ -519,6 +583,22 @@ namespace NexA.Hub.Components
         public void Hide()
         {
             gameObject.SetActive(false);
+        }
+    }
+
+    /// <summary>
+    /// Composant léger ajouté dynamiquement sur le headerButton.
+    /// Gère uniquement le clic droit pour ne PAS interférer avec Button.onClick (clic gauche).
+    /// Unity appelle TOUS les IPointerClickHandler sur un GameObject, donc Button.onClick fonctionne toujours.
+    /// </summary>
+    internal class RightClickRelay : MonoBehaviour, IPointerClickHandler
+    {
+        public System.Action<Vector2> OnRightClick;
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData.button == PointerEventData.InputButton.Right)
+                OnRightClick?.Invoke(eventData.position);
         }
     }
 }

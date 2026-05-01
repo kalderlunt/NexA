@@ -32,6 +32,18 @@ namespace NexA.Hub.Services
         /// </summary>
         public event Action<FriendStatusUpdate> OnFriendStatusChanged;
 
+        /// <summary>
+        /// Déclenché quand une demande d'ami est acceptée (les deux côtés reçoivent cet event).
+        /// Émis après confirmation BDD côté backend via STOMP /topic/friend-request.{userId}.
+        /// </summary>
+        public event Action<FriendAcceptedNotification> OnFriendAccepted;
+
+        /// <summary>
+        /// Déclenché quand une relation d'amitié est supprimée (les deux côtés reçoivent cet event).
+        /// Émis par le backend via STOMP /topic/friend-removed.{userId}.
+        /// </summary>
+        public event Action<FriendRemovedNotification> OnFriendRemoved;
+
         #endregion
 
         #region Configuration
@@ -218,31 +230,63 @@ namespace NexA.Hub.Services
             _stompConnected = true;
             Debug.Log("[FriendsManager] STOMP connecté — abonnement aux statuts d'amis");
 
-            // S'abonner au topic de présence dédié par utilisateur
-            string destination = $"/topic/presence.{_userId}";
-            string subscribeFrame = StompClient.BuildSubscribeFrame("sub-friend-status", destination);
-            await _ws.SendText(subscribeFrame);
+            // Statuts d'amis (présence)
+            string presenceDest = $"/topic/presence.{_userId}";
+            await _ws.SendText(StompClient.BuildSubscribeFrame("sub-friend-status", presenceDest));
+            Debug.Log($"[FriendsManager] Abonné à {presenceDest}");
 
-            Debug.Log($"[FriendsManager] Abonné à {destination}");
+            // Acceptations de demandes d'ami (les deux côtés)
+            string friendReqDest = $"/topic/friend-request.{_userId}";
+            await _ws.SendText(StompClient.BuildSubscribeFrame("sub-friend-request", friendReqDest));
+            Debug.Log($"[FriendsManager] Abonné à {friendReqDest}");
+
+            // Suppressions d'ami (les deux côtés)
+            string friendRemovedDest = $"/topic/friend-removed.{_userId}";
+            await _ws.SendText(StompClient.BuildSubscribeFrame("sub-friend-removed", friendRemovedDest));
+            Debug.Log($"[FriendsManager] Abonné à {friendRemovedDest}");
         }
 
         private void OnStompMessage(StompClient.StompFrame frame)
         {
             if (string.IsNullOrEmpty(frame.Body)) return;
 
+            frame.Headers.TryGetValue("subscription", out string subId);
+
             try
             {
+                if (subId == "sub-friend-request")
+                {
+                    var notification = JsonConvert.DeserializeObject<FriendAcceptedNotification>(frame.Body);
+                    if (notification != null)
+                    {
+                        Debug.Log($"[FriendsManager] Demande acceptée — nouvel ami : {notification.username}");
+                        OnFriendAccepted?.Invoke(notification);
+                    }
+                    return;
+                }
+
+                if (subId == "sub-friend-removed")
+                {
+                    var notification = JsonConvert.DeserializeObject<FriendRemovedNotification>(frame.Body);
+                    if (notification != null)
+                    {
+                        Debug.Log($"[FriendsManager] Ami supprimé — friendshipId : {notification.friendshipId}");
+                        OnFriendRemoved?.Invoke(notification);
+                    }
+                    return;
+                }
+
+                // Par défaut : changement de statut d'un ami
                 var update = JsonConvert.DeserializeObject<FriendStatusUpdate>(frame.Body);
                 if (update == null) return;
 
                 if (update.status == "ONLINE")
-                    Debug.Log($"[FriendsManager] 🟢 {update.username} vient de se connecter");
+                    Debug.Log($"[FriendsManager] {update.username} vient de se connecter");
                 else if (update.status == "OFFLINE")
-                    Debug.Log($"[FriendsManager] ⚫ {update.username} vient de se déconnecter");
+                    Debug.Log($"[FriendsManager] {update.username} vient de se déconnecter");
                 else
-                    Debug.Log($"[FriendsManager] 🟠 {update.username} → {update.status}");
+                    Debug.Log($"[FriendsManager] {update.username} → {update.status}");
 
-                // Déclencher l'événement sur le main thread (on est déjà dessus grâce à DispatchMessageQueue)
                 OnFriendStatusChanged?.Invoke(update);
             }
             catch (Exception ex)
@@ -306,5 +350,33 @@ namespace NexA.Hub.Services
         public string userId;
         public string username;
         public string status; // "ONLINE", "OFFLINE", "IN_GAME"
+    }
+
+    /// <summary>
+    /// Message reçu via STOMP quand une demande d'ami est acceptée.
+    /// Émis par le backend sur /topic/friend-request.{userId} pour les deux parties.
+    /// Format backend : { "type": "FRIEND_REQUEST_ACCEPTED", "friendshipId": "...", "userId": "...", "username": "..." }
+    /// </summary>
+    [Serializable]
+    public class FriendAcceptedNotification
+    {
+        public string type;        // "FRIEND_REQUEST_ACCEPTED"
+        public string friendshipId;
+        public string userId;      // ID du nouvel ami
+        public string username;    // Pseudo du nouvel ami
+    }
+
+    /// <summary>
+    /// Message reçu via STOMP quand une relation d'amitié est supprimée.
+    /// Émis par le backend sur /topic/friend-removed.{userId} pour les deux parties.
+    /// Format backend : { "type": "FRIEND_REMOVED", "friendshipId": "...", "userId": "...", "username": "..." }
+    /// </summary>
+    [Serializable]
+    public class FriendRemovedNotification
+    {
+        public string type;        // "FRIEND_REMOVED"
+        public string friendshipId;
+        public string userId;      // ID de l'ami retiré
+        public string username;    // Pseudo de l'ami retiré
     }
 }
